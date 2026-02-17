@@ -1,0 +1,45 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: Warm up
+    - duration: 120
+      arrivalRate: 20
+      name: Sustained load
+    - duration: 60
+      arrivalRate: 50
+      name: Spike test
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "Board collaboration simulation"
+    weight: 100
+    flow:
+      # Login
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "token"
+
+      # Get boards
+      - get:
+          url: "/api/boards"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      # Health check
+      - get:
+          url: "/health"
+
+      - think: 2
+
+      # Get metrics
+      - get:
+          url: "/metrics"
