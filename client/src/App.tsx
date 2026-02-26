@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import DashboardPage from './pages/DashboardPage'
 
-// Pages (we'll build these out next)
-const LoginPage = () => <div style={{ padding: 40 }}><h1>Login — coming soon</h1></div>
-const RegisterPage = () => <div style={{ padding: 40 }}><h1>Register — coming soon</h1></div>
-const DashboardPage = () => <div style={{ padding: 40 }}><h1>Dashboard — coming soon</h1></div>
+// Board page placeholder for now
 const BoardPage = () => <div style={{ padding: 40 }}><h1>Board — coming soon</h1></div>
 
 // Protected route wrapper
