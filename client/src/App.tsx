@@ -3,9 +3,7 @@ import { useAuthStore } from './store'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
-
-// Board page placeholder for now
-const BoardPage = () => <div style={{ padding: 40 }}><h1>Board — coming soon</h1></div>
+import BoardPage from './pages/BoardPage'
 
 // Protected route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
