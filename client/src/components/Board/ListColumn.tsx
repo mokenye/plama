@@ -7,21 +7,26 @@ import CardItem from '../Card/CardItem'
 interface ListColumnProps {
   list: List
   cards: Card[]
+  boardMembers: { id: number; name: string; email: string }[]
   onCreateCard: (listId: number, title: string, description?: string) => void
   onUpdateCard: (cardId: number, updates: { title?: string; description?: string }) => void
   onMoveCard: (cardId: number, newListId: number, newPosition: number, oldListId: number, oldPosition: number) => void
   onDeleteCard: (cardId: number, listId: number) => void
+  onDeleteList: (listId: number) => void
 }
 
 export default function ListColumn({
   list,
   cards,
+  boardMembers,
   onCreateCard,
   onUpdateCard,
   onDeleteCard,
+  onDeleteList,
 }: ListColumnProps) {
   const [showAddCard, setShowAddCard] = useState(false)
   const [newCardTitle, setNewCardTitle] = useState('')
+  const [showMenu, setShowMenu] = useState(false)
 
   const { setNodeRef, isOver } = useDroppable({
     id: `list-${list.id}`,
@@ -40,20 +45,42 @@ export default function ListColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`min-w-[280px] max-w-[280px] flex-shrink-0 rounded-xl p-3 flex flex-col max-h-[calc(100vh-120px)] transition-colors ${
+      className={`w-full md:min-w-[280px] md:max-w-[280px] md:flex-shrink-0 rounded-xl p-3 flex flex-col max-h-[500px] md:max-h-[calc(100vh-120px)] transition-colors ${
         isOver 
           ? 'bg-black/20 dark:bg-black/30' 
           : 'bg-black/10 dark:bg-black/20'
       } backdrop-blur-md border border-white/20`}
     >
       {/* List header */}
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-white font-semibold text-sm">
+      <div className="flex justify-between items-center mb-3 relative">
+        <h3 className="text-white font-semibold text-sm flex-1">
           {list.title}
         </h3>
-        <span className="text-xs text-white/70 bg-white/20 px-2 py-0.5 rounded-full">
+        <span className="text-xs text-white/70 bg-white/20 px-2 py-0.5 rounded-full mr-2">
           {cards.length}
         </span>
+        {/* Menu button */}
+        <button
+          onClick={() => setShowMenu(!showMenu)}
+          className="text-white/70 hover:text-white hover:bg-white/10 rounded p-1 transition"
+        >
+          ⋮
+        </button>
+        
+        {/* Dropdown menu */}
+        {showMenu && (
+          <div className="absolute right-0 top-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-[120px]">
+            <button
+              onClick={() => {
+                onDeleteList(list.id)
+                setShowMenu(false)
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              Delete list
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Cards */}
@@ -66,6 +93,7 @@ export default function ListColumn({
             <CardItem
               key={card.id}
               card={card}
+              boardMembers={boardMembers}
               onUpdate={onUpdateCard}
               onDelete={() => onDeleteCard(card.id, list.id)}
             />
