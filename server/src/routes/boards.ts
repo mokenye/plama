@@ -146,6 +146,59 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // --------------------------------
+// PATCH /api/boards/:id
+// Update board title and/or color
+// --------------------------------
+router.patch('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const boardId = parseInt(req.params.id);
+    const { title, background_color } = req.body;
+
+    // Check access
+    const access = await executeRead(
+      `SELECT role FROM board_members WHERE board_id = $1 AND user_id = $2`,
+      [boardId, req.userId]
+    );
+
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Build update query dynamically
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramCount = 1;
+
+    if (title !== undefined) {
+      updates.push(`title = $${paramCount++}`);
+      values.push(title);
+    }
+
+    if (background_color !== undefined) {
+      updates.push(`background_color = $${paramCount++}`);
+      values.push(background_color);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(boardId);
+
+    const result = await executeWrite(
+      `UPDATE boards SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      values
+    );
+
+    res.json({ board: transformBoard(result.rows[0]) });
+  } catch (error) {
+    console.error('[Boards API] Update error:', error);
+    res.status(500).json({ error: 'Failed to update board' });
+  }
+});
+
+// --------------------------------
 // DELETE /api/boards/:id
 // --------------------------------
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
