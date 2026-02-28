@@ -170,16 +170,44 @@ export const setupSocketHandlers = (io: Server) => {
       cardId: number;
       title?: string;
       description?: string;
+      dueDate?: string | null;
+      labels?: string[];
+      assignees?: number[];
       boardId: number;
     }) => {
       try {
+        // Build dynamic update query
+        const updates: string[] = [];
+        const values: any[] = [];
+        let paramCount = 1;
+
+        if (data.title !== undefined) {
+          updates.push(`title = $${paramCount++}`);
+          values.push(data.title);
+        }
+        if (data.description !== undefined) {
+          updates.push(`description = $${paramCount++}`);
+          values.push(data.description);
+        }
+        if (data.dueDate !== undefined) {
+          updates.push(`due_date = $${paramCount++}`);
+          values.push(data.dueDate);
+        }
+        if (data.labels !== undefined) {
+          updates.push(`labels = $${paramCount++}`);
+          values.push(data.labels);
+        }
+        if (data.assignees !== undefined) {
+          updates.push(`assignees = $${paramCount++}`);
+          values.push(data.assignees);
+        }
+
+        updates.push(`updated_at = NOW()`);
+        values.push(data.cardId);
+
         const result = await executeWrite(
-          `UPDATE cards SET
-            title = COALESCE($1, title),
-            description = COALESCE($2, description),
-            updated_at = NOW()
-           WHERE id = $3 RETURNING *`,
-          [data.title, data.description, data.cardId]
+          `UPDATE cards SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+          values
         );
 
         const dbCard = result.rows[0];
@@ -278,6 +306,32 @@ export const setupSocketHandlers = (io: Server) => {
           type: 'card-deleted',
           cardId: data.cardId,
           message: 'Failed to delete card',
+        });
+      }
+    });
+
+    socket.on('list-deleted', async (data: {
+      listId: number;
+      boardId: number;
+    }) => {
+      try {
+        // Delete all cards in the list first (CASCADE should handle this, but being explicit)
+        await executeWrite('DELETE FROM cards WHERE list_id = $1', [data.listId]);
+        
+        // Delete the list
+        await executeWrite('DELETE FROM lists WHERE id = $1', [data.listId]);
+
+        io.to(`board:${data.boardId}`).emit('list-deleted', {
+          listId: data.listId,
+          deletedBy: { id: socket.userId, name: socket.userName },
+        });
+
+      } catch (error) {
+        logger.error({ error, data }, 'Failed to delete list');
+        socket.emit('list-error', {
+          type: 'list-deleted',
+          listId: data.listId,
+          message: 'Failed to delete list',
         });
       }
     });
