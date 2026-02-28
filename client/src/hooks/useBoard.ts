@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { boardsApi } from '../services/api';
+import { boardsApi, listsApi } from '../services/api';
 import {
   initSocket,
   joinBoard,
@@ -10,6 +10,7 @@ import {
   emitCardUpdated,
   emitCardMoved,
   emitCardDeleted,
+  isSocketInitialized,
 } from '../services/socket';
 import { useBoardStore, useAuthStore } from '../store';
 import type { OptimisticCard } from '../types';
@@ -54,12 +55,15 @@ export const useBoard = (boardId: number) => {
       setLoading(true);
 
       try {
+        console.log('[useBoard] Loading board:', boardId);
         // 1. Fetch initial board data via REST
         const data = await boardsApi.getById(boardId);
+        console.log('[useBoard] Board data loaded:', data);
         if (!mounted) return;
         setBoardData(data);
 
         // 2. Init socket if not already connected
+        console.log('[useBoard] Initializing socket...');
         initSocket(token);
 
         // 3. Bind all WebSocket event handlers
@@ -71,6 +75,7 @@ export const useBoard = (boardId: number) => {
       } catch (err: unknown) {
         if (!mounted) return;
         const message = err instanceof Error ? err.message : 'Failed to load board';
+        console.error('[useBoard] Board load error:', err);
         setError(message);
         setLoading(false);
       }
@@ -81,8 +86,10 @@ export const useBoard = (boardId: number) => {
     // Cleanup on unmount or boardId change
     return () => {
       mounted = false;
-      leaveBoard(boardId);
-      unbindBoardEvents();
+      if (isSocketInitialized()) {
+        leaveBoard(boardId);
+        unbindBoardEvents();
+      }
       reset();
     };
   }, [boardId, token]);
@@ -130,6 +137,11 @@ export const useBoard = (boardId: number) => {
   const updateCard = useCallback(
     (cardId: number, updates: { title?: string; description?: string }) => {
       if (!board) return;
+      
+      // 1. Optimistically update UI
+      useBoardStore.getState().updateCard(cardId, updates);
+      
+      // 2. Emit to server
       emitCardUpdated({ cardId, ...updates, boardId: board.id });
     },
     [board]
@@ -144,6 +156,11 @@ export const useBoard = (boardId: number) => {
       oldPosition: number
     ) => {
       if (!board) return;
+      
+      // 1. Optimistically update UI immediately
+      useBoardStore.getState().moveCard(cardId, newListId, newPosition);
+      
+      // 2. Emit to server
       emitCardMoved({
         cardId,
         newListId,
@@ -159,6 +176,11 @@ export const useBoard = (boardId: number) => {
   const deleteCard = useCallback(
     (cardId: number, listId: number) => {
       if (!board) return;
+      
+      // 1. Optimistically remove from UI
+      useBoardStore.getState().removeCard(cardId);
+      
+      // 2. Emit to server
       emitCardDeleted({ cardId, listId, boardId: board.id });
     },
     [board]
@@ -171,22 +193,17 @@ export const useBoard = (boardId: number) => {
     async (title: string) => {
       if (!board) return;
       try {
-        const { list } = await boardsApi.getById(board.id).then(() =>
-          fetch(`/api/boards/${board.id}/lists`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ title }),
-          }).then((r) => r.json())
-        );
-        addList(list);
-      } catch {
-        setError('Failed to create list');
+        console.log('[useBoard] Creating list:', title, 'for board:', board.id);
+        const { list } = await listsApi.create(board.id, { title });
+        console.log('[useBoard] List created:', list);
+        useBoardStore.getState().addList(list);
+      } catch (err: any) {
+        console.error('[useBoard] Create list error:', err);
+        const errorMsg = err.response?.data?.error || err.message || 'Failed to create list';
+        alert(errorMsg);
       }
     },
-    [board, token, addList, setError]
+    [board]
   );
 
   // Get cards for a specific list (sorted by position)
