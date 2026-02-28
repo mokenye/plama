@@ -40,6 +40,18 @@ export interface Card {
   createdBy?: number;
   createdByName?: string;
   dueDate?: string;
+  labels?: string[];
+  assignees?: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Comment {
+  id: number;
+  cardId: number;
+  userId: number;
+  userName: string;
+  content: string;
   createdAt: string;
   updatedAt: string;
 }
