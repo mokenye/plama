@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
+import { transformCard } from '../utils/transform';
 import {
   addUserToBoard,
   removeUserFromBoard,
@@ -18,6 +19,40 @@ interface AuthenticatedSocket extends Socket {
 
 // Track which boards each socket is in (for cleanup on disconnect)
 const socketBoards = new Map<string, Set<number>>();
+
+// In-memory presence fallback (when Redis isn't available)
+const inMemoryPresence = new Map<number, Map<number, { id: number; name: string; joinedAt: number }>>();
+
+const addUserToPresence = async (boardId: number, userId: number, userName: string) => {
+  try {
+    await addUserToBoard(boardId, userId, userName);
+  } catch {
+    // Fallback to in-memory
+    if (!inMemoryPresence.has(boardId)) {
+      inMemoryPresence.set(boardId, new Map());
+    }
+    inMemoryPresence.get(boardId)!.set(userId, { id: userId, name: userName, joinedAt: Date.now() });
+  }
+};
+
+const removeUserFromPresence = async (boardId: number, userId: number) => {
+  try {
+    await removeUserFromBoard(boardId, userId);
+  } catch {
+    // Fallback to in-memory
+    inMemoryPresence.get(boardId)?.delete(userId);
+  }
+};
+
+const getActiveUsersFromPresence = async (boardId: number): Promise<any[]> => {
+  try {
+    return await getActiveUsers(boardId);
+  } catch {
+    // Fallback to in-memory
+    const users = inMemoryPresence.get(boardId);
+    return users ? Array.from(users.values()) : [];
+  }
+};
 
 // ================================
 // Socket.io Setup
@@ -60,25 +95,24 @@ export const setupSocketHandlers = (io: Server) => {
       socket.join(`board:${boardId}`);
       socketBoards.get(socket.id)?.add(boardId);
 
-      // Add to Redis presence
-      await addUserToBoard(boardId, socket.userId!, socket.userName!);
+      // Add to presence tracking
+      await addUserToPresence(boardId, socket.userId!, socket.userName!);
 
       // Send active users list to joining user
-      const activeUsers = await getActiveUsers(boardId);
+      const activeUsers = await getActiveUsersFromPresence(boardId);
+      logger.info({ boardId, activeUsersCount: activeUsers.length, userId: socket.userId }, 'User joined board');
       socket.emit('active-users', { users: activeUsers });
 
       // Tell everyone else this user joined
       socket.to(`board:${boardId}`).emit('user-joined', {
         user: { id: socket.userId, name: socket.userName },
       });
-
-      logger.info({ userId: socket.userId, boardId }, 'User joined board');
     });
 
     socket.on('leave-board', async ({ boardId }: { boardId: number }) => {
       socket.leave(`board:${boardId}`);
       socketBoards.get(socket.id)?.delete(boardId);
-      await removeUserFromBoard(boardId, socket.userId!);
+      await removeUserFromPresence(boardId, socket.userId!);
 
       socket.to(`board:${boardId}`).emit('user-left', { userId: socket.userId });
     });
@@ -109,7 +143,10 @@ export const setupSocketHandlers = (io: Server) => {
           [data.listId, data.title, data.description || null, position, socket.userId]
         );
 
-        const card = result.rows[0];
+        const dbCard = result.rows[0];
+        
+        // Transform to camelCase for frontend
+        const card = transformCard(dbCard);
 
         // Broadcast to ALL users in board room (including sender)
         // Include tempId so client can reconcile optimistic update
@@ -145,14 +182,17 @@ export const setupSocketHandlers = (io: Server) => {
           [data.title, data.description, data.cardId]
         );
 
-        const card = result.rows[0];
-        if (!card) {
+        const dbCard = result.rows[0];
+        if (!dbCard) {
           return socket.emit('card-error', {
             type: 'card-updated',
             cardId: data.cardId,
             message: 'Card not found',
           });
         }
+
+        // Transform to camelCase
+        const card = transformCard(dbCard);
 
         // Broadcast to all except sender (sender already updated optimistically)
         socket.to(`board:${data.boardId}`).emit('card-updated', {
@@ -265,8 +305,10 @@ export const setupSocketHandlers = (io: Server) => {
       const boards = socketBoards.get(socket.id);
       if (boards) {
         for (const boardId of boards) {
-          await removeUserFromBoard(boardId, socket.userId!);
-          socket.to(`board:${boardId}`).emit('user-left', { userId: socket.userId });
+          await removeUserFromPresence(boardId, socket.userId!);
+          
+          const activeUsers = await getActiveUsersFromPresence(boardId);
+          socket.to(`board:${boardId}`).emit('active-users', { users: activeUsers });
         }
       }
 
