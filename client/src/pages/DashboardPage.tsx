@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { boardsApi } from '../services/api'
 import { useAuthStore, useBoardsStore } from '../store'
-import type { Board } from '../types'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -14,16 +13,38 @@ export default function DashboardPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newBoardTitle, setNewBoardTitle] = useState('')
   const [creating, setCreating] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('darkMode') === 'true'
+    }
+    return false
+  })
+
+  // Dark mode toggle
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('darkMode', 'true')
+    } else {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('darkMode', 'false')
+    }
+  }, [darkMode])
 
   // Load boards on mount
   useEffect(() => {
     const loadBoards = async () => {
       setLoading(true)
+      setError(null)
       try {
         const { boards } = await boardsApi.getAll()
         setBoards(boards)
       } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to load boards')
+        const errorMsg = err.response?.data?.error || err.message || 'Failed to load boards'
+        console.error('Dashboard load error:', err)
+        setError(errorMsg)
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -40,7 +61,6 @@ export default function DashboardPage() {
       addBoard(board)
       setNewBoardTitle('')
       setShowCreateForm(false)
-      // Redirect to new board
       navigate(`/board/${board.id}`)
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to create board')
@@ -56,90 +76,83 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div>Loading boards...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent mb-4"></div>
+          <div className="text-gray-600 dark:text-gray-400">Loading boards...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg text-center max-w-md">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Failed to load boards</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header style={{
-        background: 'white',
-        borderBottom: '1px solid #ddd',
-        padding: '16px 24px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>Kanban Collab</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontSize: '14px', color: '#666' }}>
-            {user?.name}
-          </span>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              background: 'transparent',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Logout
-          </button>
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl">📋</div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Kanban Collab</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            {/* Dark mode toggle */}
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? '🌞' : '🌙'}
+            </button>
+            <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">
+              {user?.name}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main style={{ padding: '40px 24px', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Your Boards</h2>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Boards</h2>
           <button
             onClick={() => setShowCreateForm(true)}
-            style={{
-              padding: '10px 20px',
-              background: '#0052CC',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}
+            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium transition shadow-lg hover:shadow-xl"
           >
             + Create Board
           </button>
         </div>
 
-        {error && (
-          <div style={{
-            background: '#fee',
-            color: '#c33',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '24px'
-          }}>
-            {error}
-          </div>
-        )}
-
         {/* Create board form */}
         {showCreateForm && (
-          <div style={{
-            background: 'white',
-            padding: '24px',
-            borderRadius: '8px',
-            marginBottom: '24px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg mb-8 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Create New Board
             </h3>
-            <form onSubmit={handleCreateBoard}>
+            <form onSubmit={handleCreateBoard} className="space-y-4">
               <input
                 type="text"
                 value={newBoardTitle}
@@ -147,29 +160,13 @@ export default function DashboardPage() {
                 placeholder="Board title..."
                 autoFocus
                 disabled={creating}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  marginBottom: '12px',
-                  boxSizing: 'border-box'
-                }}
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               />
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="flex gap-3">
                 <button
                   type="submit"
                   disabled={creating || !newBoardTitle.trim()}
-                  style={{
-                    padding: '8px 16px',
-                    background: creating || !newBoardTitle.trim() ? '#ccc' : '#0052CC',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: creating || !newBoardTitle.trim() ? 'not-allowed' : 'pointer',
-                    fontSize: '14px'
-                  }}
+                  className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   {creating ? 'Creating...' : 'Create'}
                 </button>
@@ -180,14 +177,7 @@ export default function DashboardPage() {
                     setNewBoardTitle('')
                   }}
                   disabled={creating}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'transparent',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition"
                 >
                   Cancel
                 </button>
@@ -198,49 +188,29 @@ export default function DashboardPage() {
 
         {/* Boards grid */}
         {boards.length === 0 ? (
-          <div style={{
-            background: 'white',
-            padding: '60px',
-            borderRadius: '8px',
-            textAlign: 'center',
-            color: '#666'
-          }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-            <div style={{ fontSize: '18px', marginBottom: '8px' }}>No boards yet</div>
-            <div style={{ fontSize: '14px' }}>Create your first board to get started</div>
+          <div className="bg-white dark:bg-gray-800 p-16 rounded-xl text-center border-2 border-dashed border-gray-300 dark:border-gray-600">
+            <div className="text-6xl mb-4">📋</div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No boards yet</h3>
+            <p className="text-gray-600 dark:text-gray-400">Create your first board to get started</p>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '16px'
-          }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {boards.map((board) => (
               <Link
                 key={board.id}
                 to={`/board/${board.id}`}
-                style={{
-                  background: board.backgroundColor || '#0052CC',
-                  color: 'white',
-                  padding: '24px',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  display: 'block',
-                  transition: 'transform 0.2s',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                className="group block p-6 rounded-xl transition transform hover:-translate-y-1 hover:shadow-xl"
+                style={{ backgroundColor: board.backgroundColor || '#0052CC' }}
               >
-                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+                <h3 className="text-lg font-semibold text-white mb-2 group-hover:underline">
                   {board.title}
-                </div>
+                </h3>
                 {board.description && (
-                  <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '12px' }}>
+                  <p className="text-sm text-white/90 mb-4 line-clamp-2">
                     {board.description}
-                  </div>
+                  </p>
                 )}
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                <div className="text-xs text-white/80">
                   {board.memberCount || 1} {board.memberCount === 1 ? 'member' : 'members'}
                 </div>
               </Link>
