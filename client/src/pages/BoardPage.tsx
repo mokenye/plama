@@ -3,6 +3,7 @@ import { useBoard } from '../hooks/useBoard'
 import { useAuthStore } from '../store'
 import BoardView from '../components/Board/BoardView'
 import InviteMember from '../components/Board/InviteMember'
+import BoardSettings from '../components/Board/BoardSettings'
 import { useEffect, useState } from 'react'
 
 export default function BoardPage() {
@@ -18,13 +19,9 @@ export default function BoardPage() {
     return false
   })
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }, [darkMode])
+  const [showSettings, setShowSettings] = useState(false)
+  const [boardTitle, setBoardTitle] = useState('')
+  const [boardColor, setBoardColor] = useState('')
 
   const {
     board,
@@ -40,8 +37,24 @@ export default function BoardPage() {
     moveCard,
     deleteCard,
     createList,
+    deleteList,
     getCardsForList,
   } = useBoard(parseInt(boardId || '0'))
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
+
+  useEffect(() => {
+    if (board) {
+      setBoardTitle(board.title)
+      setBoardColor(board.backgroundColor || '#0052CC')
+    }
+  }, [board])
 
   const handleLogout = () => {
     clearAuth()
@@ -83,43 +96,34 @@ export default function BoardPage() {
   return (
     <div 
       className="min-h-screen flex flex-col"
-      style={{ background: board.backgroundColor || '#0052CC' }}
+      style={{ background: boardColor }}
     >
       {/* Header */}
       <header className="bg-black/20 backdrop-blur-md border-b border-white/10">
-        <div className="px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        <div className="px-2 sm:px-4 py-3 flex justify-between items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             <Link 
               to="/" 
-              className="text-white/80 hover:text-white transition text-sm"
+              className="text-white/80 hover:text-white transition text-sm flex-shrink-0"
             >
               ← Back
             </Link>
-            <h1 className="text-lg font-bold text-white">
-              {board.title}
+            <h1 className="text-base sm:text-lg font-bold text-white truncate">
+              {boardTitle}
             </h1>
-            {board.description && (
-              <span className="text-sm text-white/80 hidden sm:inline">
-                {board.description}
-              </span>
-            )}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-white/80 hover:text-white text-sm flex-shrink-0"
+              title="Board settings"
+            >
+              ⚙️
+            </button>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Connection status */}
-            {connectionStatus !== 'connected' && (
-              <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                connectionStatus === 'reconnecting' 
-                  ? 'bg-yellow-500 text-yellow-900' 
-                  : 'bg-red-500 text-white'
-              }`}>
-                {connectionStatus === 'reconnecting' ? '🔄 Reconnecting...' : '⚠️ Disconnected'}
-              </div>
-            )}
-
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Active users - show names */}
             {activeUsers.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs text-white">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs text-white">
                 <span>👥</span>
                 <span className="max-w-xs truncate">
                   {activeUsers.map(u => u.name).join(', ')}
@@ -127,14 +131,23 @@ export default function BoardPage() {
               </div>
             )}
 
-            {/* Invite member */}
-            <InviteMember 
-              boardId={board.id} 
-              onMemberAdded={() => {
-                // Optionally refresh members list
-                console.log('Member added')
-              }} 
-            />
+            {/* Mobile: just show count */}
+            {activeUsers.length > 0 && (
+              <div className="sm:hidden flex items-center gap-1 px-2 py-1 bg-white/20 backdrop-blur rounded-full text-xs text-white">
+                <span>👥</span>
+                <span>{activeUsers.length}</span>
+              </div>
+            )}
+
+            {/* Invite member - hidden on mobile */}
+            <div className="hidden sm:block">
+              <InviteMember 
+                boardId={board.id} 
+                onMemberAdded={() => {
+                  console.log('Member added')
+                }} 
+              />
+            </div>
 
             {/* Dark mode toggle */}
             <button
@@ -144,12 +157,15 @@ export default function BoardPage() {
               {darkMode ? '🌞' : '🌙'}
             </button>
 
-            <span className="text-sm text-white/90 hidden sm:inline">
+            {/* User name - hidden on mobile */}
+            <span className="text-sm text-white/90 hidden md:inline">
               {user?.name}
             </span>
+
+            {/* Logout button */}
             <button
               onClick={handleLogout}
-              className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition backdrop-blur"
+              className="px-2 sm:px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs sm:text-sm transition backdrop-blur"
             >
               Logout
             </button>
@@ -161,13 +177,29 @@ export default function BoardPage() {
       <BoardView
         lists={lists}
         cards={cards}
+        boardMembers={members}
         getCardsForList={getCardsForList}
         onCreateCard={createCard}
         onUpdateCard={updateCard}
         onMoveCard={moveCard}
         onDeleteCard={deleteCard}
         onCreateList={createList}
+        onDeleteList={deleteList}
       />
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <BoardSettings
+          boardId={board.id}
+          currentTitle={boardTitle}
+          currentColor={boardColor}
+          onClose={() => setShowSettings(false)}
+          onUpdate={(newTitle, newColor) => {
+            setBoardTitle(newTitle)
+            setBoardColor(newColor)
+          }}
+        />
+      )}
     </div>
   )
 }
