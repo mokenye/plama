@@ -10,12 +10,14 @@ import { logger } from './utils/logger';
 import { metricsMiddleware, metrics } from './middleware/metrics';
 import { setupSocketHandlers } from './socket/handlers';
 import { testDatabaseConnection } from './db/connection';
+import { connectRedis } from './db/redis';
 
 // Routes
 import authRoutes from './routes/auth';
 import boardRoutes from './routes/boards';
 import cardRoutes from './routes/cards';
 import listRoutes from './routes/lists';
+import memberRoutes from './routes/members';
 
 dotenv.config();
 
@@ -90,6 +92,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/boards', cardRoutes);
 app.use('/api/boards', listRoutes);
+app.use('/api/boards', memberRoutes);
 
 // ================================
 // WebSocket Handlers
@@ -130,6 +133,9 @@ const PORT = parseInt(process.env.PORT || '3000');
 const start = async () => {
   // Test database connection before starting
   await testDatabaseConnection();
+
+  // Connect to Redis
+  await connectRedis();
 
   httpServer.listen(PORT, () => {
     logger.info(`🚀 Server running on port ${PORT}`);
