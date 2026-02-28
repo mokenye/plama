@@ -125,6 +125,13 @@ export const emitCardDeleted = (data: {
   getSocket().emit('card-deleted', data);
 };
 
+export const emitListDeleted = (data: {
+  listId: number;
+  boardId: number;
+}) => {
+  getSocket().emit('list-deleted', data);
+};
+
 export const emitCursorMove = (data: { boardId: number; x: number; y: number }) => {
   getSocket().emit('cursor-move', data);
 };
@@ -178,6 +185,11 @@ export const bindBoardEvents = (boardId: number) => {
 
   s.on('card-deleted', ({ cardId }: SocketCardDeleted) => {
     store().removeCard(cardId);
+  });
+
+  s.on('list-deleted', ({ listId }: { listId: number }) => {
+    console.log('[Socket] Received list-deleted:', listId);
+    store().removeList(listId);
   });
 
   // Error handling / rollbacks
