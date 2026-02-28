@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { transformList } from '../utils/transform';
 
 const router = Router();
 router.use(authenticate);
@@ -16,6 +17,7 @@ const listSchema = z.object({
 router.post('/:boardId/lists', async (req: AuthRequest, res: Response) => {
   try {
     const boardId = parseInt(req.params.boardId);
+    console.log('[Lists API] Creating list for board:', boardId, 'Title:', req.body.title, 'User:', req.userId);
 
     // Check access
     const access = await executeRead(
@@ -23,6 +25,7 @@ router.post('/:boardId/lists', async (req: AuthRequest, res: Response) => {
       [boardId, req.userId]
     );
     if (access.rows.length === 0) {
+      console.log('[Lists API] Access denied for user:', req.userId, 'board:', boardId);
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -42,8 +45,10 @@ router.post('/:boardId/lists', async (req: AuthRequest, res: Response) => {
       [boardId, parsed.data.title, posResult.rows[0].next_pos]
     );
 
-    res.status(201).json({ list: result.rows[0] });
+    console.log('[Lists API] List created successfully:', result.rows[0]);
+    res.status(201).json({ list: transformList(result.rows[0]) });
   } catch (error) {
+    console.error('[Lists API] Error creating list:', error);
     res.status(500).json({ error: 'Failed to create list' });
   }
 });

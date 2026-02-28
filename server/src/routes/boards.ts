@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { transformBoard, transformList, transformCard, transformMember } from '../utils/transform';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       [req.userId]
     );
 
-    res.json({ boards: result.rows });
+    res.json({ boards: result.rows.map(transformBoard) });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch boards' });
   }
@@ -133,10 +134,10 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     );
 
     res.json({
-      board: boardResult.rows[0],
-      lists: listsResult.rows,
-      cards: cardsResult.rows,
-      members: membersResult.rows,
+      board: transformBoard(boardResult.rows[0]),
+      lists: listsResult.rows.map(transformList),
+      cards: cardsResult.rows.map(transformCard),
+      members: membersResult.rows.map(transformMember),
       userRole: access.rows[0].role,
     });
   } catch (error) {
