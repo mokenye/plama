@@ -9,6 +9,8 @@ export const transformCard = (dbCard: any) => ({
   createdBy: dbCard.created_by,
   createdByName: dbCard.created_by_name,
   dueDate: dbCard.due_date,
+  labels: dbCard.labels || [],
+  assignees: dbCard.assignees || [],
   createdAt: dbCard.created_at,
   updatedAt: dbCard.updated_at,
 });
