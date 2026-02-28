@@ -13,7 +13,11 @@ client.on('reconnecting', () => logger.warn('Redis reconnecting...'));
 
 export const connectRedis = async () => {
   try {
-    await client.connect();
+    if (!client.isOpen) {
+      await client.connect();
+    } else {
+      logger.info('✅ Redis already connected');
+    }
   } catch (error) {
     logger.error('❌ Redis connection failed:', error);
     // Don't crash - app can run without Redis (just no presence tracking)
