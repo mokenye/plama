@@ -10,6 +10,7 @@ import {
   emitCardUpdated,
   emitCardMoved,
   emitCardDeleted,
+  emitListDeleted,
   isSocketInitialized,
 } from '../services/socket';
 import { useBoardStore, useAuthStore } from '../store';
@@ -206,6 +207,29 @@ export const useBoard = (boardId: number) => {
     [board]
   );
 
+  const deleteList = useCallback(
+    (listId: number) => {
+      if (!board) return;
+      
+      // Get card count for confirmation
+      const cardsInList = cards.filter(c => c.listId === listId);
+      const cardCount = cardsInList.length;
+      
+      const confirmed = confirm(
+        `Delete this list and all ${cardCount} card${cardCount !== 1 ? 's' : ''} inside? This cannot be undone.`
+      );
+      
+      if (!confirmed) return;
+      
+      // Emit to socket
+      emitListDeleted({ listId, boardId: board.id });
+      
+      // Optimistically remove from UI
+      useBoardStore.getState().removeList(listId);
+    },
+    [board, cards]
+  );
+
   // Get cards for a specific list (sorted by position)
   const getCardsForList = useCallback(
     (listId: number) =>
@@ -236,5 +260,6 @@ export const useBoard = (boardId: number) => {
     moveCard,
     deleteCard,
     createList,
+    deleteList,
   };
 };
