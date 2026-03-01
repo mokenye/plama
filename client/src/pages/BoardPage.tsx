@@ -5,6 +5,7 @@ import BoardView from '../components/Board/BoardView'
 import InviteMember from '../components/Board/InviteMember'
 import BoardSettings from '../components/Board/BoardSettings'
 import { useEffect, useState } from 'react'
+import ActivityLog from '../components/Activity/ActivityLog'
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
@@ -22,6 +23,7 @@ export default function BoardPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [boardTitle, setBoardTitle] = useState('')
   const [boardColor, setBoardColor] = useState('')
+  const [showActivityLog, setShowActivityLog] = useState(false)
 
   const {
     board,
@@ -149,6 +151,15 @@ export default function BoardPage() {
               />
             </div>
 
+            {/* Activity Log button */}
+            <button
+              onClick={() => setShowActivityLog(true)}
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 backdrop-blur text-white rounded-lg text-sm transition"
+              title="View activity log"
+            >
+              📋 Activity
+            </button>
+
             {/* Dark mode toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -200,6 +211,13 @@ export default function BoardPage() {
           }}
         />
       )}
+
+      {/* Activity Log Sidebar */}
+      <ActivityLog
+        boardId={board.id}
+        isOpen={showActivityLog}
+        onClose={() => setShowActivityLog(false)}
+      />
     </div>
   )
 }
