@@ -19,6 +19,7 @@ import cardRoutes from './routes/cards';
 import listRoutes from './routes/lists';
 import memberRoutes from './routes/members';
 import commentRoutes from './routes/comments';
+import activityRoutes from './routes/activity';
 
 dotenv.config();
 
@@ -94,6 +95,7 @@ app.use('/api/boards', boardRoutes);
 app.use('/api/boards', cardRoutes);
 app.use('/api/boards', listRoutes);
 app.use('/api/boards', memberRoutes);
+app.use('/api/boards', activityRoutes);
 app.use('/api/cards', commentRoutes);
 
 // ================================
