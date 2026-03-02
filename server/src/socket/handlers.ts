@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
 import { transformCard } from '../utils/transform';
+import { logActivity } from '../utils/activityLogger';
 import {
   addUserToBoard,
   removeUserFromBoard,
@@ -148,6 +149,17 @@ export const setupSocketHandlers = (io: Server) => {
         // Transform to camelCase for frontend
         const card = transformCard(dbCard);
 
+        // Log activity
+        await logActivity({
+          boardId: data.boardId,
+          userId: socket.userId!,
+          userName: socket.userName!,
+          action: 'card_created',
+          entityType: 'card',
+          entityId: card.id,
+          entityName: card.title,
+        });
+
         // Broadcast to ALL users in board room (including sender)
         // Include tempId so client can reconcile optimistic update
         io.to(`board:${data.boardId}`).emit('card-created', {
@@ -247,6 +259,21 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
+        // Get card title and list names for activity log
+        const cardResult = await executeWrite(
+          'SELECT title FROM cards WHERE id = $1',
+          [data.cardId]
+        );
+        const cardTitle = cardResult.rows[0]?.title || 'Card';
+
+        const listsResult = await executeWrite(
+          'SELECT id, title FROM lists WHERE id = ANY($1)',
+          [[data.oldListId, data.newListId]]
+        );
+        const listMap = new Map(listsResult.rows.map((l: any) => [l.id, l.title]));
+        const oldListTitle = listMap.get(data.oldListId) || 'List';
+        const newListTitle = listMap.get(data.newListId) || 'List';
+
         // Update card position in DB
         await executeWrite(
           `UPDATE cards SET list_id = $1, position = $2, updated_at = NOW()
@@ -268,6 +295,21 @@ export const setupSocketHandlers = (io: Server) => {
            WHERE list_id = $1 AND position >= $2 AND id != $3`,
           [data.newListId, data.newPosition, data.cardId]
         );
+
+        // Log activity
+        await logActivity({
+          boardId: data.boardId,
+          userId: socket.userId!,
+          userName: socket.userName!,
+          action: 'card_moved',
+          entityType: 'card',
+          entityId: data.cardId,
+          entityName: cardTitle,
+          metadata: {
+            fromList: oldListTitle,
+            toList: newListTitle,
+          },
+        });
 
         // Broadcast move to all other users
         socket.to(`board:${data.boardId}`).emit('card-moved', {
@@ -292,7 +334,25 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
+        // Get card title before deleting
+        const cardResult = await executeWrite(
+          'SELECT title FROM cards WHERE id = $1',
+          [data.cardId]
+        );
+        const cardTitle = cardResult.rows[0]?.title || 'Card';
+
         await executeWrite('DELETE FROM cards WHERE id = $1', [data.cardId]);
+
+        // Log activity
+        await logActivity({
+          boardId: data.boardId,
+          userId: socket.userId!,
+          userName: socket.userName!,
+          action: 'card_deleted',
+          entityType: 'card',
+          entityId: data.cardId,
+          entityName: cardTitle,
+        });
 
         io.to(`board:${data.boardId}`).emit('card-deleted', {
           cardId: data.cardId,
@@ -318,8 +378,26 @@ export const setupSocketHandlers = (io: Server) => {
         // Delete all cards in the list first (CASCADE should handle this, but being explicit)
         await executeWrite('DELETE FROM cards WHERE list_id = $1', [data.listId]);
         
+        // Get list title before deleting
+        const listResult = await executeWrite(
+          'SELECT title FROM lists WHERE id = $1',
+          [data.listId]
+        );
+        const listTitle = listResult.rows[0]?.title || 'List';
+        
         // Delete the list
         await executeWrite('DELETE FROM lists WHERE id = $1', [data.listId]);
+
+        // Log activity
+        await logActivity({
+          boardId: data.boardId,
+          userId: socket.userId!,
+          userName: socket.userName!,
+          action: 'list_deleted',
+          entityType: 'list',
+          entityId: data.listId,
+          entityName: listTitle,
+        });
 
         io.to(`board:${data.boardId}`).emit('list-deleted', {
           listId: data.listId,
