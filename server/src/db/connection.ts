@@ -1,7 +1,12 @@
 import { Pool } from 'pg';
+// import pg from 'pg';
 import { logger } from '../utils/logger';
 import dotenv from 'dotenv';
 dotenv.config();
+
+// Force pg to return timestamps as strings instead of converting to local time
+// pg.types.setTypeParser(1114, (str) => str + 'Z'); // TIMESTAMP
+// pg.types.setTypeParser(1184, (str) => str);        // TIMESTAMPTZ
 
 // ================================
 // Connection Pools
@@ -82,8 +87,8 @@ export const schema = `
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
     avatar_url VARCHAR(500),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPZ DEFAULT NOW(),
+    updated_at TIMESTAMPZ DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS boards (
@@ -92,8 +97,8 @@ export const schema = `
     description TEXT,
     owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     background_color VARCHAR(7) DEFAULT '#0052CC',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPZ DEFAULT NOW(),
+    updated_at TIMESTAMPZ DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS board_members (
@@ -101,7 +106,7 @@ export const schema = `
     board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20) DEFAULT 'member',
-    joined_at TIMESTAMP DEFAULT NOW(),
+    joined_at TIMESTAMPZ DEFAULT NOW(),
     UNIQUE(board_id, user_id)
   );
 
@@ -110,7 +115,7 @@ export const schema = `
     board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     position INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPZ DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS cards (
@@ -120,9 +125,9 @@ export const schema = `
     description TEXT,
     position INTEGER NOT NULL,
     created_by INTEGER REFERENCES users(id),
-    due_date TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    due_date TIMESTAMPZ,
+    created_at TIMESTAMPZ DEFAULT NOW(),
+    updated_at TIMESTAMPZ DEFAULT NOW()
   );
 
   -- Performance indexes
