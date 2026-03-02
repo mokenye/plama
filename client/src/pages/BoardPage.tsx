@@ -6,6 +6,8 @@ import InviteMember from '../components/Board/InviteMember'
 import BoardSettings from '../components/Board/BoardSettings'
 import { useEffect, useState } from 'react'
 import ActivityLog from '../components/Activity/ActivityLog'
+import SearchFilters from '../components/Search/SearchFilters'
+import { useCardFilters } from '../hooks/useCardFilters'
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
@@ -42,6 +44,22 @@ export default function BoardPage() {
     deleteList,
     getCardsForList,
   } = useBoard(parseInt(boardId || '0'))
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    filters,
+    setFilters,
+    filteredCards,
+    hasActiveFilters,
+  } = useCardFilters(cards)
+
+  // Filter cards by list ID
+  const getFilteredCardsForList = (listId: number) => {
+    return filteredCards
+      .filter(c => c.listId === listId)
+      .sort((a, b) => a.position - b.position)
+  }
 
   useEffect(() => {
     if (darkMode) {
@@ -113,6 +131,17 @@ export default function BoardPage() {
             <h1 className="text-base sm:text-lg font-bold text-white truncate">
               {boardTitle}
             </h1>
+
+            {/* Search and Filters */}
+            <div className="flex-1 max-w-xl">
+              <SearchFilters
+                onSearchChange={setSearchTerm}
+                onFilterChange={setFilters}
+                members={members}
+                currentFilters={filters}
+              />
+            </div>
+
             <button
               onClick={() => setShowSettings(true)}
               className="text-white/80 hover:text-white text-sm flex-shrink-0"
@@ -187,9 +216,9 @@ export default function BoardPage() {
       {/* Board content */}
       <BoardView
         lists={lists}
-        cards={cards}
+        cards={filteredCards}
         boardMembers={members}
-        getCardsForList={getCardsForList}
+        getCardsForList={getFilteredCardsForList}
         onCreateCard={createCard}
         onUpdateCard={updateCard}
         onMoveCard={moveCard}
@@ -197,6 +226,15 @@ export default function BoardPage() {
         onCreateList={createList}
         onDeleteList={deleteList}
       />
+
+      {/* No results message */}
+      {hasActiveFilters && filteredCards.length === 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 px-6 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            No cards match your filters. Try adjusting your search or filters.
+          </p>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
