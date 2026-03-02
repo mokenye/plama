@@ -41,6 +41,7 @@ router.get('/:boardId/activity', async (req: AuthRequest, res: Response) => {
       entityName: row.entity_name,
       metadata: row.metadata,
       createdAt: row.created_at,
+      
     }));
 
     res.json({ activities });
