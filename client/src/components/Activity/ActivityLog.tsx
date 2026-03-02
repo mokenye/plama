@@ -123,14 +123,33 @@ export default function ActivityLog({ boardId, isOpen, onClose }: ActivityLogPro
 }
 
 function formatTimeAgo(dateString: string): string {
+  // Parse the date - handle both ISO strings and timestamps
   const date = new Date(dateString)
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    console.error('Invalid date:', dateString)
+    return 'unknown time'
+  }
+  
   const now = new Date()
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  
+  // Debug log
+  console.log('Date comparison:', {
+    dateString,
+    parsedDate: date.toISOString(),
+    now: now.toISOString(),
+    secondsDiff: seconds
+  })
 
-  if (seconds < 60) return 'just now'
+  if (seconds < 10) return 'just now'
+  if (seconds < 60) return `${seconds}s ago`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`
+  if (seconds < 2592000) return `${Math.floor(seconds / 604800)}w ago`
+  if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo ago`
 
   return date.toLocaleDateString('en-US', {
     month: 'short',
