@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import type { Card } from '../types'
 
-// Default labels always available as a starting point
 export const DEFAULT_LABELS = [
   'Bug',
   'Feature',
@@ -14,16 +13,24 @@ export const DEFAULT_LABELS = [
 ]
 
 /**
- * Derives the full set of unique labels from all cards on the board,
- * merged with the defaults. This means any custom label added to a card
- * automatically appears in filters and other cards' label lists.
+ * Derives all unique labels from board cards, merged with defaults.
+ * Memoised on a stable string key so it only recomputes when labels
+ * actually change — not on every card position/title update.
  */
 export function useBoardLabels(cards: Card[]) {
-  const allLabels = useMemo(() => {
-    const fromCards = cards.flatMap((c) => c.labels ?? [])
-    const merged = new Set([...DEFAULT_LABELS, ...fromCards])
-    return Array.from(merged).sort()
-  }, [cards])
+  // Build a stable cache key from only the label data, not the full cards array
+  const labelKey = useMemo(
+    () =>
+      cards
+        .flatMap((c) => c.labels ?? [])
+        .sort()
+        .join('|'),
+    [cards]
+  )
 
-  return allLabels
+  return useMemo(() => {
+    const fromCards = cards.flatMap((c) => c.labels ?? [])
+    return Array.from(new Set([...DEFAULT_LABELS, ...fromCards])).sort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labelKey])
 }
