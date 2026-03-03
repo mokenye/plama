@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { OptimisticCard } from '../../types'
@@ -7,46 +8,51 @@ import CardDetailsModal from './CardDetailsModal'
 interface CardItemProps {
   card: OptimisticCard
   boardMembers: { id: number; name: string; email: string }[]
+  boardLabels: string[]
   onUpdate: (cardId: number, updates: { title?: string; description?: string }) => void
   onDelete: () => void
+  isDone?: boolean // pass true when card is in a "Done" list
 }
 
-export default function CardItem({ card, boardMembers, onUpdate, onDelete }: CardItemProps) {
+// Subtle tinted label pills instead of solid colors
+const LABEL_COLORS: Record<string, string> = {
+  'Bug':          'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+  'Feature':      'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+  'Urgent':       'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+  'Low Priority': 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  'Design':       'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+  'Backend':      'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+  'Frontend':     'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
+  'Testing':      'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-500',
+}
+
+export default function CardItem({ card, boardMembers, boardLabels, onUpdate, onDelete, isDone }: CardItemProps) {
   const [showModal, setShowModal] = useState(false)
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `card-${card.id}`,
-    data: { type: 'card', card }
+    data: { type: 'card', card },
   })
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
+  const style = { transform: CSS.Transform.toString(transform), transition }
+  const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && !isDone
 
   return (
     <>
       <div
         ref={setNodeRef}
         style={style}
-        onClick={() => {
-          if (!isDragging) {
-            setShowModal(true)
-          }
-        }}
-        className={`group relative bg-white dark:bg-gray-800 rounded-lg p-2 shadow-sm border border-gray-200 dark:border-gray-700 transition-all ${
-          isDragging 
-            ? 'opacity-50 shadow-2xl cursor-grabbing' 
-            : card.isOptimistic 
-            ? 'opacity-60' 
-            : 'hover:shadow-md cursor-pointer'
+        onClick={() => { if (!isDragging) setShowModal(true) }}
+        className={`group relative bg-white dark:bg-gray-800 rounded-lg p-3 border transition-all outline-none focus:outline-none touch-none ${
+          isDragging
+            ? 'opacity-50 shadow-xl cursor-grabbing'
+            : card.isOptimistic
+            ? 'opacity-60'
+            : 'cursor-pointer'
+        } ${
+          isDone
+            ? 'opacity-55 border-gray-100 dark:border-gray-700/40'
+            : 'border-gray-100 dark:border-gray-700/60 shadow-sm hover:shadow-md hover:border-gray-200 dark:hover:border-gray-600'
         }`}
         {...attributes}
         {...listeners}
@@ -57,7 +63,7 @@ export default function CardItem({ card, boardMembers, onUpdate, onDelete }: Car
             {card.labels.map((label) => (
               <span
                 key={label}
-                className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs font-medium"
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${LABEL_COLORS[label] ?? 'bg-gray-100 text-gray-500'}`}
               >
                 {label}
               </span>
@@ -65,89 +71,85 @@ export default function CardItem({ card, boardMembers, onUpdate, onDelete }: Car
           </div>
         )}
 
-        <div className="text-sm text-gray-900 dark:text-white leading-relaxed pr-6 break-words overflow-wrap-anywhere">
+        {/* Title */}
+        <p className={`text-sm leading-snug pr-4 break-words ${
+          isDone
+            ? 'line-through text-gray-400 dark:text-gray-500'
+            : 'text-gray-800 dark:text-white'
+        }`}>
           {card.title}
           {card.isOptimistic && (
-            <span className="block text-xs text-gray-500 dark:text-gray-400 italic mt-1">
-              Saving...
-            </span>
+            <span className="block text-xs text-gray-400 italic mt-0.5" style={{ textDecoration: 'none' }}>Saving…</span>
           )}
-        </div>
+        </p>
 
-        {/* Due Date */}
-        {card.dueDate && (
-          <div className={`text-xs mt-2 flex items-center gap-1 ${
-            new Date(card.dueDate) < new Date() 
-              ? 'text-red-600 dark:text-red-400 font-medium' 
-              : 'text-gray-600 dark:text-gray-400'
-          }`}>
-            📅 {new Date(card.dueDate).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            })}
-            {new Date(card.dueDate) < new Date() && <span className="text-xs">⚠️</span>}
-          </div>
+        {/* Description — hidden for done cards to reduce noise */}
+        {card.description && !isDone && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 line-clamp-2 break-words leading-relaxed">
+            {card.description}
+          </p>
         )}
 
-        {/* Assignees */}
-        {card.assignees && card.assignees.length > 0 && (
-          <div className="flex items-center gap-1 mt-2">
-            {card.assignees.slice(0, 3).map((assigneeId) => {
-              const member = boardMembers.find(m => m.id === assigneeId)
-              if (!member) return null
-              return (
-                <div
-                  key={assigneeId}
-                  className="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center text-xs font-bold"
-                  title={member.name}
-                >
-                  {member.name.charAt(0).toUpperCase()}
-                </div>
-              )
-            })}
-            {card.assignees.length > 3 && (
-              <div className="w-6 h-6 rounded-full bg-gray-400 text-white flex items-center justify-center text-xs font-bold">
-                +{card.assignees.length - 3}
+        {/* Footer: due date + assignees */}
+        {(card.dueDate || (card.assignees && card.assignees.length > 0)) && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/60">
+            {card.dueDate ? (
+              <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+                isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
+              }`}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                {new Date(card.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            ) : <span />}
+
+            {card.assignees && card.assignees.length > 0 && (
+              <div className="flex -space-x-1">
+                {card.assignees.slice(0, 3).map((assigneeId) => {
+                  const member = boardMembers.find(m => m.id === assigneeId)
+                  if (!member) return null
+                  return (
+                    <div
+                      key={assigneeId}
+                      title={member.name}
+                      className="w-4 h-4 rounded-full bg-indigo-400 text-white flex items-center justify-center text-[8px] font-bold border border-white dark:border-gray-800"
+                    >
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                  )
+                })}
+                {card.assignees.length > 3 && (
+                  <div className="w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300 flex items-center justify-center text-[8px] font-bold border border-white dark:border-gray-800">
+                    +{card.assignees.length - 3}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Delete button */}
+        {/* Delete */}
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            if (confirm('Delete this card?')) {
-              onDelete()
-            }
-          }}
-          className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs z-10"
+          onClick={(e) => { e.stopPropagation(); if (confirm('Delete this card?')) onDelete() }}
+          className="absolute top-2 right-2 w-4 h-4 flex items-center justify-center text-gray-300 hover:text-red-400 dark:text-gray-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-base leading-none"
         >
           ×
         </button>
-
-        {card.description && (
-          <div className="text-xs text-gray-600 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 line-clamp-2 break-words">
-            {card.description}
-          </div>
-        )}
-
-        {card.createdByName && (
-          <div className="text-xs text-gray-500 dark:text-gray-500 mt-2 truncate">
-            {card.createdByName}
-          </div>
-        )}
       </div>
 
-      {/* Card Details Modal */}
-      {showModal && (
+      {showModal && createPortal(
         <CardDetailsModal
           card={card}
           boardMembers={boardMembers}
+          boardLabels={boardLabels}
           onClose={() => setShowModal(false)}
           onUpdate={onUpdate}
           onDelete={onDelete}
-        />
+        />,
+        document.body
       )}
     </>
   )
