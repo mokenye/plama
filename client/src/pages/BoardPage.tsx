@@ -4,7 +4,7 @@ import { useAuthStore } from '../store'
 import BoardView from '../components/Board/BoardView'
 import InviteMember from '../components/Board/InviteMember'
 import BoardSettings from '../components/Board/BoardSettings'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import ActivityLog from '../components/Activity/ActivityLog'
 import SearchFilters from '../components/Search/SearchFilters'
 import { useCardFilters } from '../hooks/useCardFilters'
@@ -44,8 +44,11 @@ export default function BoardPage() {
 
   const boardLabels = useBoardLabels(cards)
 
-  const getFilteredCardsForList = (listId: number) =>
-    filteredCards.filter(c => c.listId === listId).sort((a, b) => a.position - b.position)
+  const getFilteredCardsForList = useCallback(
+    (listId: number) =>
+      filteredCards.filter(c => c.listId === listId).sort((a, b) => a.position - b.position),
+    [filteredCards]
+  )
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
@@ -303,7 +306,6 @@ export default function BoardPage() {
             onFilterChange={setFilters}
             members={members}
             currentFilters={filters}
-            boardLabels={boardLabels}
           />
         </div>
       </header>
