@@ -6,7 +6,7 @@ interface SearchFiltersProps {
   onFilterChange: (filters: FilterState) => void
   members: { id: number; name: string }[]
   currentFilters: FilterState
-  boardLabels: string[]
+  boardLabels?: string[]
 }
 
 export interface FilterState {
@@ -21,7 +21,7 @@ export default function SearchFilters({
   onFilterChange,
   members,
   currentFilters,
-  boardLabels,
+  boardLabels = ['Bug','Feature','Urgent','Low Priority','Design','Backend','Frontend','Testing'],
 }: SearchFiltersProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
