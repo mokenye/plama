@@ -114,6 +114,7 @@ interface BoardState {
   setActiveUsers: (users: ActiveUser[]) => void;
   addActiveUser: (user: ActiveUser) => void;
   removeActiveUser: (userId: number) => void;
+  setUserAway: (userId: number, away: boolean) => void;
 
   // UI state
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting') => void;
@@ -209,6 +210,11 @@ export const useBoardStore = create<BoardState>((set) => ({
     set((state) => ({
       activeUsers: state.activeUsers.filter((u) => u.id !== userId),
     })),
+  setUserAway: (userId: number, away: boolean) => set((state) => ({
+    activeUsers: state.activeUsers.map(u =>
+      u.id === userId ? { ...u, away } : u
+    ),
+  })),
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setLoading: (isLoading) => set({ isLoading }),
