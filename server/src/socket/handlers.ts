@@ -9,6 +9,7 @@ import {
 } from '../db/redis';
 import { executeWrite } from '../db/connection';
 import { verifyToken } from '../utils/jwt';
+import { notifyCardAssignment, notifyCardComment, notifyCardMoved } from '../utils/notifications';
 
 // ================================
 // Types
@@ -118,6 +119,14 @@ export const setupSocketHandlers = (io: Server) => {
       socket.to(`board:${boardId}`).emit('user-left', { userId: socket.userId });
     });
 
+    socket.on('user-away', ({ boardId }) => {
+      socket.to(`board:${boardId}`).emit('user-away', { userId: socket.userId });
+    });
+
+    socket.on('user-active', ({ boardId }) => {
+      socket.to(`board:${boardId}`).emit('user-active', { userId: socket.userId });
+    });
+
     // --------------------------------
     // Cards: Real-time CRUD
     // This is the KEY real-time logic
@@ -188,6 +197,13 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
+        // Fetch old assignees BEFORE the update so we can diff them
+        const oldCardResult = await executeWrite(
+          'SELECT assignees FROM cards WHERE id = $1',
+          [data.cardId]
+        );
+        const oldAssignees: number[] = oldCardResult.rows[0]?.assignees || [];
+
         // Build dynamic update query
         const updates: string[] = [];
         const values: any[] = [];
@@ -218,7 +234,7 @@ export const setupSocketHandlers = (io: Server) => {
         values.push(data.cardId);
 
         const result = await executeWrite(
-          `UPDATE cards SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+          `UPDATE cards SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *, (SELECT name FROM users WHERE id = created_by) AS created_by_name`,
           values
         );
 
@@ -233,6 +249,23 @@ export const setupSocketHandlers = (io: Server) => {
 
         // Transform to camelCase
         const card = transformCard(dbCard);
+
+        // Notify newly added assignees
+        if (data.assignees !== undefined) {
+          const newAssignees: number[] = dbCard.assignees || [];
+          const addedAssignees = newAssignees.filter((id: number) => !oldAssignees.includes(id));
+
+          for (const assigneeId of addedAssignees) {
+            await notifyCardAssignment(
+              assigneeId,
+              socket.userId!,
+              socket.userName!,
+              data.boardId,
+              card.id,
+              card.title
+            );
+          }
+        }
 
         // Broadcast to all except sender (sender already updated optimistically)
         socket.to(`board:${data.boardId}`).emit('card-updated', {
@@ -259,12 +292,13 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
-        // Get card title and list names for activity log
+        // Get card title, assignees, and list names for activity + notifications
         const cardResult = await executeWrite(
-          'SELECT title FROM cards WHERE id = $1',
+          'SELECT title, assignees FROM cards WHERE id = $1',
           [data.cardId]
         );
         const cardTitle = cardResult.rows[0]?.title || 'Card';
+        const cardAssignees: number[] = cardResult.rows[0]?.assignees || [];
 
         const listsResult = await executeWrite(
           'SELECT id, title FROM lists WHERE id = ANY($1)',
@@ -310,6 +344,20 @@ export const setupSocketHandlers = (io: Server) => {
             toList: newListTitle,
           },
         });
+
+        // Notify assignees about the move
+        if (cardAssignees.length > 0) {
+          await notifyCardMoved(
+            cardAssignees,
+            socket.userId!,
+            socket.userName!,
+            data.boardId,
+            data.cardId,
+            cardTitle,
+            oldListTitle,
+            newListTitle
+          );
+        }
 
         // Broadcast move to all other users
         socket.to(`board:${data.boardId}`).emit('card-moved', {
