@@ -132,6 +132,7 @@ export interface ActiveUser {
   id: number;
   name: string;
   joinedAt: number;
+  away?: boolean;
   cursor?: { x: number; y: number };
 }
 
