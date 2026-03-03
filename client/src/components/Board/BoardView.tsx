@@ -16,6 +16,7 @@ interface BoardViewProps {
   lists: List[]
   cards: Card[]
   boardMembers: { id: number; name: string; email: string }[]
+  boardLabels: string[]
   getCardsForList: (listId: number) => Card[]
   onCreateCard: (listId: number, title: string, description?: string) => void
   onUpdateCard: (cardId: number, updates: { title?: string; description?: string }) => void
@@ -29,6 +30,7 @@ export default function BoardView({
   lists,
   cards,
   boardMembers,
+  boardLabels,
   getCardsForList,
   onCreateCard,
   onUpdateCard,
@@ -111,12 +113,14 @@ export default function BoardView({
           {/* List columns */}
           {lists
             .sort((a, b) => a.position - b.position)
-            .map((list) => (
+            .map((list, index) => (
               <ListColumn
                 key={list.id}
                 list={list}
+                isFirst={index === 0}
                 cards={getCardsForList(list.id)}
                 boardMembers={boardMembers}
+                boardLabels={boardLabels}
                 onCreateCard={onCreateCard}
                 onUpdateCard={onUpdateCard}
                 onMoveCard={onMoveCard}
@@ -134,6 +138,13 @@ export default function BoardView({
                     type="text"
                     value={newListTitle}
                     onChange={(e) => setNewListTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation()
+                        setShowAddList(false)
+                        setNewListTitle('')
+                      }
+                    }}
                     placeholder="Enter list title..."
                     autoFocus
                     className="w-full px-3 py-2 border-none rounded-lg text-sm mb-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-white/50"
@@ -160,6 +171,7 @@ export default function BoardView({
               </div>
             ) : (
               <button
+                data-add-list
                 onClick={() => setShowAddList(true)}
                 className="w-full p-3 bg-white/20 hover:bg-white/30 backdrop-blur text-white rounded-xl text-sm font-medium text-left transition"
               >

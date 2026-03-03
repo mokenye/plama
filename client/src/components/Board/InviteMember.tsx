@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface InviteMemberProps {
   boardId: number
@@ -10,6 +10,23 @@ export default function InviteMember({ boardId, onMemberAdded }: InviteMemberPro
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleCancel = () => {
+    setShowForm(false)
+    setEmail('')
+    setMessage('')
+  }
+
+  // Close on Escape
+  useEffect(() => {
+    if (!showForm) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleCancel()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [showForm])
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,6 +82,7 @@ export default function InviteMember({ boardId, onMemberAdded }: InviteMemberPro
     <div className="relative">
       <form onSubmit={handleInvite} className="flex items-center gap-2">
         <input
+          ref={inputRef}
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -82,20 +100,16 @@ export default function InviteMember({ boardId, onMemberAdded }: InviteMemberPro
         </button>
         <button
           type="button"
-          onClick={() => {
-            setShowForm(false)
-            setEmail('')
-            setMessage('')
-          }}
+          onClick={handleCancel}
           className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition"
         >
           Cancel
         </button>
       </form>
       {message && (
-        <div className={`absolute top-full mt-2 left-0 text-xs px-3 py-1 rounded-lg ${
-          message.startsWith('✓') 
-            ? 'bg-green-500 text-white' 
+        <div className={`absolute top-full mt-2 left-0 text-xs px-3 py-1 rounded-lg whitespace-nowrap ${
+          message.startsWith('✓')
+            ? 'bg-green-500 text-white'
             : 'bg-red-500 text-white'
         }`}>
           {message}

@@ -9,15 +9,16 @@ interface BoardSettingsProps {
   onUpdate: (title: string, color: string) => void
 }
 
+// Curated palette: intentional, slightly desaturated hues that look good as full-bleed backgrounds
 const PRESET_COLORS = [
-  { name: 'Ocean Blue', value: '#0052CC' },
-  { name: 'Teal', value: '#00A3BF' },
-  { name: 'Green', value: '#00875A' },
-  { name: 'Purple', value: '#5243AA' },
-  { name: 'Red', value: '#DE350B' },
-  { name: 'Orange', value: '#FF8B00' },
-  { name: 'Pink', value: '#E774BB' },
-  { name: 'Gray', value: '#505F79' },
+  { name: 'Slate Blue',    value: '#4F6BED' },
+  { name: 'Indigo',        value: '#6366F1' },
+  { name: 'Violet',        value: '#7C3AED' },
+  { name: 'Teal',          value: '#0D9488' },
+  { name: 'Emerald',       value: '#059669' },
+  { name: 'Amber',         value: '#B45309' },
+  { name: 'Rose',          value: '#E11D48' },
+  { name: 'Slate',         value: '#475569' },
 ]
 
 export default function BoardSettings({
@@ -36,27 +37,18 @@ export default function BoardSettings({
 
   const handleSave = async () => {
     if (!title.trim()) return
-
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/boards/${boardId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          background_color: color,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: title.trim(), background_color: color }),
       })
-
       if (!response.ok) throw new Error('Failed to update board')
-
       onUpdate(title.trim(), color)
       onClose()
-    } catch (err) {
+    } catch {
       alert('Failed to update board')
     } finally {
       setLoading(false)
@@ -69,15 +61,11 @@ export default function BoardSettings({
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/boards/${boardId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       })
-
       if (!response.ok) throw new Error('Failed to delete board')
-
       navigate('/')
-    } catch (err) {
+    } catch {
       alert('Failed to delete board')
       setDeleting(false)
     }
@@ -85,82 +73,89 @@ export default function BoardSettings({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Board Settings</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl"
-            >
-              ×
-            </button>
-          </div>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Board settings</h2>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-lg leading-none"
+          >
+            ×
+          </button>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Board Name
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+              Board name
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
-          {/* Color Picker */}
+          {/* Color picker */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Background Color
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+              Color
             </label>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-8 gap-2">
               {PRESET_COLORS.map((preset) => (
                 <button
                   key={preset.value}
                   onClick={() => setColor(preset.value)}
-                  className={`h-16 rounded-lg transition-all ${
-                    color === preset.value
-                      ? 'ring-4 ring-brand-500 scale-105'
-                      : 'hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: preset.value }}
                   title={preset.name}
-                />
+                  className="relative h-8 rounded-lg transition-transform hover:scale-110 focus:outline-none"
+                  style={{ backgroundColor: preset.value }}
+                >
+                  {color === preset.value && (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
+            {/* Preview */}
+            <div
+              className="mt-3 h-10 rounded-lg transition-colors"
+              style={{ backgroundColor: color }}
+            />
           </div>
 
-          {/* Delete Board */}
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+          {/* Delete */}
+          <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm font-medium"
+                className="text-sm text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-colors"
               >
-                Delete Board
+                Delete board…
               </button>
             ) : (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                <p className="text-sm text-red-800 dark:text-red-200 mb-3">
-                  Are you sure? This will permanently delete the board and all its cards.
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl p-4">
+                <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                  This will permanently delete the board and all its cards. Are you sure?
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm disabled:opacity-50"
+                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg disabled:opacity-50 transition-colors"
                   >
-                    {deleting ? 'Deleting...' : 'Yes, Delete'}
+                    {deleting ? 'Deleting…' : 'Yes, delete'}
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded text-sm"
+                    className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
                     Cancel
                   </button>
@@ -171,17 +166,17 @@ export default function BoardSettings({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+        <div className="px-6 pb-6 flex gap-2">
           <button
             onClick={handleSave}
             disabled={loading || !title.trim()}
-            className="flex-1 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="flex-1 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Saving...' : 'Save Changes'}
+            {loading ? 'Saving…' : 'Save changes'}
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition"
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             Cancel
           </button>

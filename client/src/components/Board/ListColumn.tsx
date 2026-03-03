@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { List, Card } from '../../types'
@@ -8,6 +8,8 @@ interface ListColumnProps {
   list: List
   cards: Card[]
   boardMembers: { id: number; name: string; email: string }[]
+  boardLabels: string[]
+  isFirst?: boolean
   onCreateCard: (listId: number, title: string, description?: string) => void
   onUpdateCard: (cardId: number, updates: { title?: string; description?: string }) => void
   onMoveCard: (cardId: number, newListId: number, newPosition: number, oldListId: number, oldPosition: number) => void
@@ -19,6 +21,8 @@ export default function ListColumn({
   list,
   cards,
   boardMembers,
+  boardLabels,
+  isFirst,
   onCreateCard,
   onUpdateCard,
   onDeleteCard,
@@ -27,6 +31,16 @@ export default function ListColumn({
   const [showAddCard, setShowAddCard] = useState(false)
   const [newCardTitle, setNewCardTitle] = useState('')
   const [showMenu, setShowMenu] = useState(false)
+
+  // Close menu on Escape
+  useEffect(() => {
+    if (!showMenu) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); setShowMenu(false) }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [showMenu])
 
   const { setNodeRef, isOver } = useDroppable({
     id: `list-${list.id}`,
@@ -64,7 +78,9 @@ export default function ListColumn({
           onClick={() => setShowMenu(!showMenu)}
           className="text-white/70 hover:text-white hover:bg-white/10 rounded p-1 transition"
         >
-          ⋮
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+          </svg>
         </button>
         
         {/* Dropdown menu */}
@@ -94,8 +110,10 @@ export default function ListColumn({
               key={card.id}
               card={card}
               boardMembers={boardMembers}
+              boardLabels={boardLabels}
               onUpdate={onUpdateCard}
               onDelete={() => onDeleteCard(card.id, list.id)}
+              isDone={list.title.toLowerCase() === 'done'}
             />
           ))}
         </div>
@@ -107,6 +125,13 @@ export default function ListColumn({
           <textarea
             value={newCardTitle}
             onChange={(e) => setNewCardTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                setShowAddCard(false)
+                setNewCardTitle('')
+              }
+            }}
             placeholder="Enter card title..."
             autoFocus
             rows={3}
@@ -134,6 +159,7 @@ export default function ListColumn({
       ) : (
         <button
           onClick={() => setShowAddCard(true)}
+          {...(isFirst ? { 'data-add-card': '' } : {})}
           className="w-full p-2 text-left text-white/90 hover:bg-white/10 rounded-lg text-sm transition mt-auto"
         >
           + Add a card
