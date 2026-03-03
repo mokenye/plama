@@ -42,7 +42,7 @@ export const initSocket = (token: string): Socket => {
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     timeout: 10000,
-    transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
+    transports: ['websocket', 'polling'],
   });
 
   socket.on('connect', () => {
@@ -56,7 +56,6 @@ export const initSocket = (token: string): Socket => {
   socket.on('disconnect', (reason) => {
     console.log('[Socket] Disconnected, reason:', reason);
     if (reason === 'io server disconnect') {
-      // Server disconnected, manually reconnect
       socket?.connect();
     }
   });
@@ -82,8 +81,18 @@ export const leaveBoard = (boardId: number) => {
 };
 
 // ================================
+// Away state
+// ================================
+export const emitUserAway = (boardId: number) => {
+  socket?.emit('user-away', { boardId });
+};
+
+export const emitUserActive = (boardId: number) => {
+  socket?.emit('user-active', { boardId });
+};
+
+// ================================
 // Card Emission Helpers
-// These are called by UI components
 // ================================
 export const emitCardCreated = (data: {
   listId: number;
@@ -138,8 +147,6 @@ export const emitCursorMove = (data: { boardId: number; x: number; y: number }) 
 
 // ================================
 // Event Listener Setup
-// Called once when board loads
-// Binds all incoming WebSocket events to Zustand store
 // ================================
 export const bindBoardEvents = (boardId: number) => {
   console.log('[Socket] Binding events for board:', boardId);
@@ -150,7 +157,6 @@ export const bindBoardEvents = (boardId: number) => {
   s.on('connect', () => {
     console.log('[Socket] Reconnected, rejoining board');
     store().setConnectionStatus('connected');
-    // Rejoin board room on reconnect
     joinBoard(boardId);
   });
 
@@ -166,10 +172,18 @@ export const bindBoardEvents = (boardId: number) => {
   s.on('card-created', ({ card, tempId }: SocketCard) => {
     console.log('[Socket] Received card-created:', { card, tempId });
     if (tempId) {
-      // Confirm our own optimistic card
-      store().confirmOptimisticCard(tempId, card);
+      // Preserve createdByName from the optimistic card — the server response
+      // may not include it if the JOIN wasn't done in the RETURNING clause
+      const optimistic = store().cards.find(
+        (c: any) => c.tempId === tempId
+      );
+      const confirmedCard = {
+        ...card,
+        createdByName: card.createdByName ?? optimistic?.createdByName,
+      };
+      store().confirmOptimisticCard(tempId, confirmedCard);
     } else {
-      // New card from another user
+      // New card from another user — createdByName comes from server
       store().addCard(card);
     }
   });
@@ -219,6 +233,15 @@ export const bindBoardEvents = (boardId: number) => {
     console.log('[Socket] User left:', userId);
     store().removeActiveUser(userId);
   });
+
+  // Away state — another user went away or came back
+  s.on('user-away', ({ userId }: { userId: number }) => {
+    store().setUserAway(userId, true);
+  });
+
+  s.on('user-active', ({ userId }: { userId: number }) => {
+    store().setUserAway(userId, false);
+  });
 };
 
 export const unbindBoardEvents = () => {
@@ -237,5 +260,7 @@ export const unbindBoardEvents = () => {
   s.off('active-users');
   s.off('user-joined');
   s.off('user-left');
+  s.off('user-away');
+  s.off('user-active');
   s.off('cursor-update');
 };
