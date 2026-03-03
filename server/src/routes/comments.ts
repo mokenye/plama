@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { notifyCardComment } from '../utils/notifications';
 
 const router = Router();
 router.use(authenticate);
@@ -53,10 +54,17 @@ router.post('/:cardId/comments', async (req: AuthRequest, res: Response) => {
       [cardId, req.userId, content.trim()]
     );
 
-    const userResult = await executeRead(
-      'SELECT name FROM users WHERE id = $1',
-      [req.userId]
-    );
+    // Fetch commenter name, and card details (title, assignees, boardId via list)
+    const [userResult, cardResult] = await Promise.all([
+      executeRead('SELECT name FROM users WHERE id = $1', [req.userId]),
+      executeRead(
+        `SELECT c.title, c.assignees, l.board_id
+         FROM cards c
+         JOIN lists l ON c.list_id = l.id
+         WHERE c.id = $1`,
+        [cardId]
+      ),
+    ]);
 
     const comment = {
       id: result.rows[0].id,
@@ -67,6 +75,22 @@ router.post('/:cardId/comments', async (req: AuthRequest, res: Response) => {
       createdAt: result.rows[0].created_at,
       updatedAt: result.rows[0].updated_at,
     };
+
+    // Notify card assignees (fire-and-forget, don't block the response)
+    if (cardResult.rows.length > 0) {
+      const { title: cardTitle, assignees, board_id: boardId } = cardResult.rows[0];
+
+      if (assignees && assignees.length > 0) {
+        notifyCardComment(
+          assignees,
+          req.userId!,
+          userResult.rows[0].name,
+          boardId,
+          cardId,
+          cardTitle
+        ).catch((err) => console.error('[Comments API] Notification error:', err));
+      }
+    }
 
     res.status(201).json({ comment });
   } catch (error) {
