@@ -20,6 +20,7 @@ import listRoutes from './routes/lists';
 import memberRoutes from './routes/members';
 import commentRoutes from './routes/comments';
 import activityRoutes from './routes/activity';
+import notificationRoutes from './routes/notifications';
 
 dotenv.config();
 
@@ -97,6 +98,7 @@ app.use('/api/boards', listRoutes);
 app.use('/api/boards', memberRoutes);
 app.use('/api/boards', activityRoutes);
 app.use('/api/cards', commentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // ================================
 // WebSocket Handlers
