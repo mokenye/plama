@@ -11,6 +11,8 @@ import {
   emitCardMoved,
   emitCardDeleted,
   emitListDeleted,
+  emitUserAway,
+  emitUserActive,
   isSocketInitialized,
 } from '../services/socket';
 import { useBoardStore, useAuthStore } from '../store';
@@ -57,20 +59,14 @@ export const useBoard = (boardId: number) => {
 
       try {
         console.log('[useBoard] Loading board:', boardId);
-        // 1. Fetch initial board data via REST
         const data = await boardsApi.getById(boardId);
         console.log('[useBoard] Board data loaded:', data);
         if (!mounted) return;
         setBoardData(data);
 
-        // 2. Init socket if not already connected
         console.log('[useBoard] Initializing socket...');
         initSocket(token);
-
-        // 3. Bind all WebSocket event handlers
         bindBoardEvents(boardId);
-
-        // 4. Join the board room
         joinBoard(boardId);
 
       } catch (err: unknown) {
@@ -84,7 +80,6 @@ export const useBoard = (boardId: number) => {
 
     setup();
 
-    // Cleanup on unmount or boardId change
     return () => {
       mounted = false;
       if (isSocketInitialized()) {
@@ -96,22 +91,41 @@ export const useBoard = (boardId: number) => {
   }, [boardId, token]);
 
   // --------------------------------
+  // Away state — tab visibility tracking
+  // --------------------------------
+  useEffect(() => {
+    if (!boardId) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        emitUserAway(boardId);
+      } else {
+        emitUserActive(boardId);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [boardId]);
+
+  // --------------------------------
   // Card Actions with Optimistic Updates
   // --------------------------------
   const createCard = useCallback(
     (listId: number, title: string, description?: string) => {
       if (!user || !board) return;
 
-      // Generate temp ID for optimistic update reconciliation
       const tempId = `temp-${Date.now()}-${Math.random()}`;
 
-      // 1. Optimistically add to UI immediately
       const optimisticCard: OptimisticCard = {
-        id: -1, // Placeholder until server confirms
+        id: -1,
         listId,
         title,
         description,
-        position: 9999, // Will be corrected on server confirm
+        position: 9999,
         createdBy: user.id,
         createdByName: user.name,
         createdAt: new Date().toISOString(),
@@ -121,15 +135,12 @@ export const useBoard = (boardId: number) => {
       };
       addOptimisticCard(optimisticCard);
 
-      // 2. Emit to server via WebSocket
       emitCardCreated({ listId, title, description, boardId: board.id, tempId });
 
-      // 3. Rollback if no server confirmation within 5s
       const rollbackTimer = setTimeout(() => {
         rollbackOptimisticCard(tempId);
       }, 5000);
 
-      // Clear rollback timer when server confirms (handled in socket service)
       return () => clearTimeout(rollbackTimer);
     },
     [user, board, addOptimisticCard, rollbackOptimisticCard]
@@ -138,11 +149,7 @@ export const useBoard = (boardId: number) => {
   const updateCard = useCallback(
     (cardId: number, updates: { title?: string; description?: string }) => {
       if (!board) return;
-      
-      // 1. Optimistically update UI
       useBoardStore.getState().updateCard(cardId, updates);
-      
-      // 2. Emit to server
       emitCardUpdated({ cardId, ...updates, boardId: board.id });
     },
     [board]
@@ -157,19 +164,8 @@ export const useBoard = (boardId: number) => {
       oldPosition: number
     ) => {
       if (!board) return;
-      
-      // 1. Optimistically update UI immediately
       useBoardStore.getState().moveCard(cardId, newListId, newPosition);
-      
-      // 2. Emit to server
-      emitCardMoved({
-        cardId,
-        newListId,
-        newPosition,
-        oldListId,
-        oldPosition,
-        boardId: board.id,
-      });
+      emitCardMoved({ cardId, newListId, newPosition, oldListId, oldPosition, boardId: board.id });
     },
     [board]
   );
@@ -177,11 +173,7 @@ export const useBoard = (boardId: number) => {
   const deleteCard = useCallback(
     (cardId: number, listId: number) => {
       if (!board) return;
-      
-      // 1. Optimistically remove from UI
       useBoardStore.getState().removeCard(cardId);
-      
-      // 2. Emit to server
       emitCardDeleted({ cardId, listId, boardId: board.id });
     },
     [board]
@@ -210,27 +202,22 @@ export const useBoard = (boardId: number) => {
   const deleteList = useCallback(
     (listId: number) => {
       if (!board) return;
-      
-      // Get card count for confirmation
+
       const cardsInList = cards.filter(c => c.listId === listId);
       const cardCount = cardsInList.length;
-      
+
       const confirmed = confirm(
         `Delete this list and all ${cardCount} card${cardCount !== 1 ? 's' : ''} inside? This cannot be undone.`
       );
-      
+
       if (!confirmed) return;
-      
-      // Emit to socket
+
       emitListDeleted({ listId, boardId: board.id });
-      
-      // Optimistically remove from UI
       useBoardStore.getState().removeList(listId);
     },
     [board, cards]
   );
 
-  // Get cards for a specific list (sorted by position)
   const getCardsForList = useCallback(
     (listId: number) =>
       cards
@@ -240,7 +227,6 @@ export const useBoard = (boardId: number) => {
   );
 
   return {
-    // Data
     board,
     lists,
     cards,
@@ -250,11 +236,7 @@ export const useBoard = (boardId: number) => {
     isLoading,
     error,
     connectionStatus,
-
-    // Helpers
     getCardsForList,
-
-    // Actions
     createCard,
     updateCard,
     moveCard,
