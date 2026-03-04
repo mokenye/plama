@@ -7,9 +7,9 @@ import {
   removeUserFromBoard,
   getActiveUsers,
 } from '../db/redis';
-import { executeWrite } from '../db/connection';
+import { executeWrite, executeTransaction } from '../db/connection';
 import { verifyToken } from '../utils/jwt';
-import { notifyCardAssignment, notifyCardComment, notifyCardMoved } from '../utils/notifications';
+import { notifyCardAssignment, notifyCardComment, notifyCardMoved, registerUserSocket, unregisterUserSocket } from '../utils/notifications';
 
 // ================================
 // Types
@@ -89,6 +89,9 @@ export const setupSocketHandlers = (io: Server) => {
     logger.info({ socketId: socket.id, userId: socket.userId }, 'User connected');
 
     socketBoards.set(socket.id, new Set());
+
+    // Track user→socket mapping for targeted notification delivery
+    registerUserSocket(socket.userId!, socket.id);
 
     // --------------------------------
     // Board: Join / Leave
@@ -292,45 +295,54 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
-        // Get card title, assignees, and list names for activity + notifications
+        // Read card + list metadata outside the transaction (reads are safe concurrent)
         const cardResult = await executeWrite(
           'SELECT title, assignees FROM cards WHERE id = $1',
           [data.cardId]
         );
-        const cardTitle = cardResult.rows[0]?.title || 'Card';
+        const cardTitle    = cardResult.rows[0]?.title     || 'Card';
         const cardAssignees: number[] = cardResult.rows[0]?.assignees || [];
 
         const listsResult = await executeWrite(
           'SELECT id, title FROM lists WHERE id = ANY($1)',
           [[data.oldListId, data.newListId]]
         );
-        const listMap = new Map(listsResult.rows.map((l: any) => [l.id, l.title]));
+        const listMap     = new Map(listsResult.rows.map((l: any) => [l.id, l.title]));
         const oldListTitle = listMap.get(data.oldListId) || 'List';
         const newListTitle = listMap.get(data.newListId) || 'List';
 
-        // Update card position in DB
-        await executeWrite(
-          `UPDATE cards SET list_id = $1, position = $2, updated_at = NOW()
-           WHERE id = $3`,
-          [data.newListId, data.newPosition, data.cardId]
-        );
+        // ── Transactional position update ──────────────────────────────────
+        // All three writes succeed or all three roll back together.
+        // This prevents position gaps/duplicates when two moves arrive
+        // simultaneously for cards in the same list.
+        await executeTransaction(async (client) => {
+          // 1. Move the card itself
+          await client.query(
+            `UPDATE cards
+             SET list_id = $1, position = $2, updated_at = NOW()
+             WHERE id = $3`,
+            [data.newListId, data.newPosition, data.cardId]
+          );
 
-        // Reorder positions in both lists
-        // Shift positions down in old list
-        await executeWrite(
-          `UPDATE cards SET position = position - 1
-           WHERE list_id = $1 AND position > $2 AND id != $3`,
-          [data.oldListId, data.oldPosition, data.cardId]
-        );
+          // 2. Close the gap in the old list
+          await client.query(
+            `UPDATE cards
+             SET position = position - 1
+             WHERE list_id = $1 AND position > $2 AND id != $3`,
+            [data.oldListId, data.oldPosition, data.cardId]
+          );
 
-        // Shift positions up in new list
-        await executeWrite(
-          `UPDATE cards SET position = position + 1
-           WHERE list_id = $1 AND position >= $2 AND id != $3`,
-          [data.newListId, data.newPosition, data.cardId]
-        );
+          // 3. Make room in the new list
+          await client.query(
+            `UPDATE cards
+             SET position = position + 1
+             WHERE list_id = $1 AND position >= $2 AND id != $3`,
+            [data.newListId, data.newPosition, data.cardId]
+          );
+        });
+        // ───────────────────────────────────────────────────────────────────
 
-        // Log activity
+        // Log activity + notify (fire after commit — non-critical)
         await logActivity({
           boardId: data.boardId,
           userId: socket.userId!,
@@ -339,13 +351,9 @@ export const setupSocketHandlers = (io: Server) => {
           entityType: 'card',
           entityId: data.cardId,
           entityName: cardTitle,
-          metadata: {
-            fromList: oldListTitle,
-            toList: newListTitle,
-          },
+          metadata: { fromList: oldListTitle, toList: newListTitle },
         });
 
-        // Notify assignees about the move
         if (cardAssignees.length > 0) {
           await notifyCardMoved(
             cardAssignees,
@@ -359,7 +367,7 @@ export const setupSocketHandlers = (io: Server) => {
           );
         }
 
-        // Broadcast move to all other users
+        // Broadcast to all other users
         socket.to(`board:${data.boardId}`).emit('card-moved', {
           ...data,
           movedBy: { id: socket.userId, name: socket.userName },
@@ -367,7 +375,7 @@ export const setupSocketHandlers = (io: Server) => {
 
       } catch (error) {
         logger.error({ error, data }, 'Failed to move card');
-        // Tell sender to rollback optimistic update
+        // Transaction rolled back — tell sender to undo their optimistic update
         socket.emit('card-move-failed', {
           cardId: data.cardId,
           oldListId: data.oldListId,
@@ -477,10 +485,78 @@ export const setupSocketHandlers = (io: Server) => {
     }
 
     // --------------------------------
+    // Card reorder within list
+    // --------------------------------
+    socket.on('cards-reordered', async (data: {
+      listId: number;
+      cardIds: number[];
+      boardId: number;
+    }) => {
+      try {
+        // Update positions for each card in the new order
+        for (let i = 0; i < data.cardIds.length; i++) {
+          await executeWrite(
+            'UPDATE cards SET position = $1, updated_at = NOW() WHERE id = $2 AND list_id = $3',
+            [i, data.cardIds[i], data.listId]
+          );
+        }
+        // Broadcast to others — sender already updated optimistically
+        socket.to(`board:${data.boardId}`).emit('cards-reordered', {
+          listId: data.listId,
+          cardIds: data.cardIds,
+        });
+      } catch (error) {
+        logger.error({ error, data }, 'Failed to reorder cards');
+      }
+    });
+
+    // --------------------------------
+    // List reorder
+    // --------------------------------
+    socket.on('list-moved', async (data: {
+      listId: number;
+      newPosition: number;
+      oldPosition: number;
+      boardId: number;
+    }) => {
+      try {
+        // Get all lists for this board ordered by position
+        const listsResult = await executeWrite(
+          'SELECT id FROM lists WHERE board_id = $1 ORDER BY position ASC',
+          [data.boardId]
+        );
+        const ids: number[] = listsResult.rows.map((r: any) => r.id);
+
+        // Apply the same arrayMove logic as the client
+        const oldIdx = ids.indexOf(data.listId);
+        if (oldIdx !== -1) {
+          ids.splice(oldIdx, 1);
+          ids.splice(data.newPosition, 0, data.listId);
+          // Persist new positions
+          for (let i = 0; i < ids.length; i++) {
+            await executeWrite(
+              'UPDATE lists SET position = $1 WHERE id = $2',
+              [i, ids[i]]
+            );
+          }
+        }
+
+        socket.to(`board:${data.boardId}`).emit('list-moved', {
+          listId: data.listId,
+          newPosition: data.newPosition,
+        });
+      } catch (error) {
+        logger.error({ error, data }, 'Failed to move list');
+      }
+    });
+
+    // --------------------------------
     // Disconnect Cleanup
     // --------------------------------
     socket.on('disconnect', async () => {
       logger.info({ socketId: socket.id, userId: socket.userId }, 'User disconnected');
+
+      unregisterUserSocket(socket.userId!, socket.id);
 
       const boards = socketBoards.get(socket.id);
       if (boards) {
