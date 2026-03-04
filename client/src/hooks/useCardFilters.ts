@@ -18,7 +18,6 @@ export function useCardFilters(cards: Card[]) {
   const filteredCards = useMemo(() => {
     let result = [...cards]
 
-    // Search filter (title + description)
     if (searchTerm) {
       const search = searchTerm.toLowerCase()
       result = result.filter(
@@ -28,21 +27,18 @@ export function useCardFilters(cards: Card[]) {
       )
     }
 
-    // Labels filter
     if (filters.labels.length > 0) {
       result = result.filter((card) =>
         filters.labels.some((label) => card.labels?.includes(label))
       )
     }
 
-    // Assignees filter
     if (filters.assignees.length > 0) {
       result = result.filter((card) =>
         filters.assignees.some((userId) => card.assignees?.includes(userId))
       )
     }
 
-    // Overdue filter
     if (filters.overdue) {
       const now = new Date()
       result = result.filter((card) => {
@@ -60,9 +56,10 @@ export function useCardFilters(cards: Card[]) {
     filters,
     setFilters,
     filteredCards,
-    hasActiveFilters: searchTerm !== '' || 
-      filters.labels.length > 0 || 
-      filters.assignees.length > 0 || 
+    hasActiveFilters:
+      searchTerm !== '' ||
+      filters.labels.length > 0 ||
+      filters.assignees.length > 0 ||
       filters.overdue,
   }
 }
