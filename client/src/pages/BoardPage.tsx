@@ -5,6 +5,8 @@ import BoardView from '../components/Board/BoardView'
 import InviteMember from '../components/Board/InviteMember'
 import BoardSettings from '../components/Board/BoardSettings'
 import { useEffect, useState, useCallback } from 'react'
+import { useUndo } from '../hooks/useUndo'
+import UndoToast from '../components/UI/UndoToast'
 import ActivityLog from '../components/Activity/ActivityLog'
 import SearchFilters from '../components/Search/SearchFilters'
 import { useCardFilters } from '../hooks/useCardFilters'
@@ -32,9 +34,10 @@ export default function BoardPage() {
 
   const {
     board, lists, cards, members, activeUsers,
-    isLoading, error, connectionStatus,
+    isLoading, error, connectionStatus, userRole,
     createCard, updateCard, moveCard, deleteCard,
     createList, deleteList, getCardsForList,
+    reorderCards, moveList, addMember, removeMember,
   } = useBoard(parseInt(boardId || '0'))
 
   const {
@@ -43,6 +46,20 @@ export default function BoardPage() {
   } = useCardFilters(cards)
 
   const boardLabels = useBoardLabels(cards)
+  const { pendingActions, scheduleAction } = useUndo()
+
+  const handleDeleteCard = useCallback((cardId: number, listId: number) => {
+    scheduleAction('Card deleted', () => deleteCard(cardId, listId))
+  }, [scheduleAction, deleteCard])
+
+  const handleDeleteList = useCallback((listId: number) => {
+    const list = lists.find((l: { id: number; title: string }) => l.id === listId)
+    const cardCount = cards.filter((c: { listId: number }) => c.listId === listId).length
+    scheduleAction(
+      `List "${list?.title ?? ''}" and ${cardCount} card${cardCount !== 1 ? 's' : ''} deleted`,
+      () => deleteList(listId)
+    )
+  }, [scheduleAction, deleteList, lists, cards])
 
   const getFilteredCardsForList = useCallback(
     (listId: number) =>
@@ -128,7 +145,7 @@ export default function BoardPage() {
   if (!board) return null
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: boardColor }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: boardColor }}>
 
       {/* Header */}
       <header className="bg-black/30 backdrop-blur-md border-b border-black/10 flex-shrink-0">
@@ -257,7 +274,7 @@ export default function BoardPage() {
 
             {/* Invite — sm+ only */}
             <div className="hidden sm:block">
-              <InviteMember boardId={board.id} onMemberAdded={() => {}} />
+              <InviteMember boardId={board.id} onMemberAdded={(member) => addMember({ ...member, role: member.role as 'owner' | 'member' })} />
             </div>
 
             {/* Activity log — md+ only */}
@@ -310,20 +327,25 @@ export default function BoardPage() {
         </div>
       </header>
 
-      {/* Board content */}
-      <BoardView
-        lists={lists}
-        cards={filteredCards}
-        boardMembers={members}
-        boardLabels={boardLabels}
-        getCardsForList={getFilteredCardsForList}
-        onCreateCard={createCard}
-        onUpdateCard={updateCard}
-        onMoveCard={moveCard}
-        onDeleteCard={deleteCard}
-        onCreateList={createList}
-        onDeleteList={deleteList}
-      />
+      {/* Board content — fills remaining height, BoardView handles its own scroll */}
+      <div className="flex-1 overflow-hidden min-h-0">
+        <BoardView
+          lists={lists}
+          cards={filteredCards}
+          boardMembers={members}
+          boardLabels={boardLabels}
+          getCardsForList={getFilteredCardsForList}
+          onCreateCard={createCard}
+          onUpdateCard={updateCard}
+          onMoveCard={moveCard}
+          onReorderCards={reorderCards}
+          onMoveList={moveList}
+          onDeleteCard={handleDeleteCard}
+          onCreateList={createList}
+          onDeleteList={handleDeleteList}
+        />
+      </div>
+      <UndoToast actions={pendingActions} />
 
       {hasActiveFilters && filteredCards.length === 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 px-5 py-2.5 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
@@ -336,8 +358,12 @@ export default function BoardPage() {
           boardId={board.id}
           currentTitle={boardTitle}
           currentColor={boardColor}
+          isOwner={userRole === 'owner'}
+          members={members}
+          currentUserId={user?.id ?? 0}
           onClose={() => setShowSettings(false)}
           onUpdate={(newTitle, newColor) => { setBoardTitle(newTitle); setBoardColor(newColor) }}
+          onMemberRemoved={(userId) => removeMember(userId)}
         />
       )}
 
