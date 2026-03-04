@@ -9,6 +9,7 @@ interface ListColumnProps {
   cards: Card[]
   boardMembers: { id: number; name: string; email: string }[]
   boardLabels: string[]
+  dragHandleProps?: React.HTMLAttributes<HTMLElement>
   isFirst?: boolean
   onCreateCard: (listId: number, title: string, description?: string) => void
   onUpdateCard: (cardId: number, updates: { title?: string; description?: string }) => void
@@ -22,6 +23,7 @@ export default function ListColumn({
   cards,
   boardMembers,
   boardLabels,
+  dragHandleProps,
   isFirst,
   onCreateCard,
   onUpdateCard,
@@ -59,15 +61,18 @@ export default function ListColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`w-full md:min-w-[280px] md:max-w-[280px] md:flex-shrink-0 rounded-xl p-3 flex flex-col max-h-[500px] md:max-h-[calc(100vh-120px)] transition-colors ${
-        isOver 
-          ? 'bg-black/20 dark:bg-black/30' 
-          : 'bg-black/10 dark:bg-black/20'
-      } backdrop-blur-md border border-white/20`}
+      className={`w-[280px] flex-shrink-0 rounded-xl p-3 flex flex-col transition-colors
+        h-full max-h-full
+        ${isOver ? 'bg-black/20 dark:bg-black/30' : 'bg-black/10 dark:bg-black/20'}
+        backdrop-blur-md border border-white/20`}
     >
-      {/* List header */}
+      {/* List header — drag handle for list reordering */}
       <div className="flex justify-between items-center mb-3 relative">
-        <h3 className="text-white font-semibold text-sm flex-1">
+        <h3
+          {...dragHandleProps}
+          className="text-white font-semibold text-sm flex-1 cursor-grab active:cursor-grabbing select-none"
+          title="Drag to reorder list"
+        >
           {list.title}
         </h3>
         <span className="text-xs text-white/70 bg-white/20 px-2 py-0.5 rounded-full mr-2">
