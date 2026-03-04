@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBoardsStore } from '../../store'
 
@@ -69,9 +69,16 @@ export default function BoardSettings({
   const navigate    = useNavigate()
   const removeBoard = useBoardsStore((s) => s.removeBoard)
 
-  const [title, setTitle]   = useState(currentTitle)
-  const [color, setColor]   = useState(currentColor)
+  const [title, setTitle]     = useState(currentTitle)
+  const [color, setColor]     = useState(currentColor)
   const [loading, setLoading] = useState(false)
+
+  // Local members list — updated immediately on remove/invite
+  // so the UI reflects changes without waiting for a hard refresh
+  const [localMembers, setLocalMembers] = useState<Member[]>(members)
+
+  // Sync when parent passes a new members array (e.g. after inviting someone)
+  useEffect(() => { setLocalMembers(members) }, [members])
 
   // Remove member state
   const [removingId, setRemovingId]           = useState<number | null>(null)
@@ -114,8 +121,10 @@ export default function BoardSettings({
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error()
-      onMemberRemoved(userId)
+      // Remove immediately from local list — no hard refresh needed
+      setLocalMembers(prev => prev.filter(m => m.id !== userId))
       setConfirmRemoveId(null)
+      onMemberRemoved(userId)
     } catch {
       alert('Failed to remove member')
     } finally {
@@ -206,10 +215,10 @@ export default function BoardSettings({
           {/* Members */}
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Members <span className="text-gray-400 font-normal">({members.length})</span>
+              Members <span className="text-gray-400 font-normal">({localMembers.length})</span>
             </h3>
             <ul className="space-y-2">
-              {members.map(member => (
+              {localMembers.map(member => (
                 <li key={member.id} className="flex items-center gap-3">
                   <MemberAvatar member={member} />
                   <div className="flex-1 min-w-0">
