@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { notifyBoardInvite, userSockets, getIo } from '../utils/notifications';
 
 const router = Router();
 router.use(authenticate);
@@ -57,6 +58,14 @@ router.post('/:boardId/members', async (req: AuthRequest, res: Response) => {
       [boardId, invitedUser.id]
     );
 
+    // After successfully inserting the board member:
+    await notifyBoardInvite(
+      invitedUser.id,   // the user being invited
+      req.userId!,     // the user doing the inviting
+      req.userName!,   // inviter's name (from auth middleware)
+      boardId
+    ).catch(err => console.error('[Members] Notification error:', err));
+
     res.status(201).json({
       member: {
         id: invitedUser.id,
@@ -104,6 +113,18 @@ router.delete('/:boardId/members/:userId', async (req: AuthRequest, res: Respons
       `DELETE FROM board_members WHERE board_id = $1 AND user_id = $2`,
       [boardId, userIdToRemove]
     );
+
+    // Push board-removed directly to the removed user's socket(s)
+    // so their dashboard updates instantly without a refresh
+    const io = getIo()
+    if (io) {
+      const sockets = userSockets.get(userIdToRemove)
+      if (sockets && sockets.size > 0) {
+        for (const socketId of sockets) {
+          io.to(socketId).emit('board-removed', { boardId })
+        }
+      }
+    }
 
     res.json({ message: 'Member removed' });
   } catch (error) {
