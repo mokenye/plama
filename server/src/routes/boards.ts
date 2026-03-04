@@ -53,7 +53,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const boardResult = await executeWrite(
       `INSERT INTO boards (title, description, owner_id, background_color)
        VALUES ($1, $2, $3, $4) RETURNING *`,
-      [title, description || null, req.userId, background_color || '#0052CC']
+      [title, description || null, req.userId, background_color || '#6366F1']
     );
 
     const board = boardResult.rows[0];
