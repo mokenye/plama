@@ -93,6 +93,21 @@ export const listsApi = {
     const res = await api.delete(`/boards/${boardId}/lists/${listId}`);
     return res.data;
   },
+
+  reorder: async (boardId: number, listId: number, newPosition: number) => {
+    const res = await api.patch(`/boards/${boardId}/lists/${listId}/reorder`, { position: newPosition });
+    return res.data;
+  },
+};
+
+// ================================
+// Cards
+// ================================
+export const cardsApi = {
+  reorder: async (boardId: number, listId: number, cardIds: number[]) => {
+    const res = await api.patch(`/boards/${boardId}/lists/${listId}/cards/reorder`, { cardIds });
+    return res.data;
+  },
 };
 
 export default api;
