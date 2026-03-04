@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { logger } from './utils/logger';
 import { metricsMiddleware, metrics } from './middleware/metrics';
 import { setupSocketHandlers } from './socket/handlers';
+import { setIo } from './utils/notifications';
 import { testDatabaseConnection } from './db/connection';
 import { connectRedis } from './db/redis';
 
@@ -42,6 +43,12 @@ const io = new Server(httpServer, {
   pingTimeout: 60000,
   pingInterval: 25000,
 });
+
+// Give notifications util a reference to io without creating a circular import
+setIo(io); 
+// This allows us to emit notifications from anywhere in the codebase without importing the server directly, which can lead to circular dependencies. 
+// Cicular dependencies can cause issues in Node.js, such as modules being partially loaded, which can lead to unexpected behavior. By using a setter function like setIo, we can avoid this problem while still providing access to the Socket.io instance where it's needed. 
+// Here, we call setIo(io) after creating the Socket.io server, allowing us to store the reference to io in a way that can be accessed by other modules without directly importing the server module. This is a common pattern to avoid circular dependencies while still sharing important instances across the application.
 
 // ================================
 // Middleware
