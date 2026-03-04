@@ -43,6 +43,8 @@ export const useBoard = (boardId: number) => {
     rollbackOptimisticCard,
     addList,
     removeList,
+    addMember,
+    removeMember,
     setLoading,
     setError,
     reset,
@@ -275,5 +277,7 @@ export const useBoard = (boardId: number) => {
     moveList,
     createList,
     deleteList,
+    addMember,
+    removeMember,
   };
 };
