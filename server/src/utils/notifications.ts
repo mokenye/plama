@@ -1,12 +1,24 @@
-import { executeWrite } from '../db/connection';
+import { executeWrite, executeRead } from '../db/connection';
+import type { Server } from 'socket.io';
 
-export type NotificationType = 
+// io is set once at startup by server.ts calling setIo(io)
+// This breaks the circular dependency:
+//   server.ts → handlers.ts → notifications_util.ts → server.ts (circular)
+let _io: Server | null = null;
+export function setIo(io: Server) { _io = io; }
+export function getIo() { return _io; }
+
+// userId → set of socketIds currently connected
+export const userSockets = new Map<number, Set<string>>();
+
+export type NotificationType =
   | 'assigned'
   | 'mentioned'
   | 'card_updated'
   | 'card_moved'
   | 'comment_added'
-  | 'due_soon';
+  | 'due_soon'
+  | 'board_invite';
 
 interface CreateNotificationParams {
   userId: number;
@@ -18,6 +30,17 @@ interface CreateNotificationParams {
   link?: string;
 }
 
+
+export function registerUserSocket(userId: number, socketId: string) {
+  if (!userSockets.has(userId)) userSockets.set(userId, new Set());
+  userSockets.get(userId)!.add(socketId);
+}
+
+export function unregisterUserSocket(userId: number, socketId: string) {
+  userSockets.get(userId)?.delete(socketId);
+}
+
+// ── Core create + push ───────────────────────────────────────────────────────
 export async function createNotification({
   userId,
   boardId,
@@ -28,17 +51,108 @@ export async function createNotification({
   link,
 }: CreateNotificationParams): Promise<void> {
   try {
-    await executeWrite(
-      `INSERT INTO notifications (user_id, board_id, card_id, type, title, message, link)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, boardId || null, cardId || null, type, title, message, link || null]
+    const result = await executeWrite(
+      `INSERT INTO notifications (user_id, board_id, card_id, type, title, message, link, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC')
+       RETURNING *`,
+      [userId, boardId ?? null, cardId ?? null, type, title, message, link ?? null]
     );
+
+    const row = result.rows[0];
+    const notification = {
+      id: row.id,
+      userId: row.user_id,
+      boardId: row.board_id,
+      cardId: row.card_id,
+      type: row.type,
+      title: row.title,
+      message: row.message,
+      read: row.read,
+      link: row.link,
+      // Always send as UTC ISO string so clients parse it correctly
+      createdAt: row.created_at instanceof Date
+        ? row.created_at.toISOString()
+        : new Date(row.created_at + 'Z').toISOString(),
+    };
+
+    // Push to recipient's socket(s) immediately — no polling needed
+    const sockets = userSockets.get(userId);
+    if (_io && sockets && sockets.size > 0) {
+      for (const socketId of sockets) {
+        _io.to(socketId).emit('notification', notification);
+      }
+    }
   } catch (error) {
     console.error('[Notifications] Failed to create notification:', error);
   }
 }
 
-// Helper: Notify when assigned to a card
+// ── Fetch board name helper ──────────────────────────────────────────────────
+async function getBoardName(boardId: number): Promise<string> {
+  try {
+    const result = await executeRead(
+      'SELECT title FROM boards WHERE id = $1',
+      [boardId]
+    );
+    return result.rows[0]?.title ?? 'a board';
+  } catch {
+    return 'a board';
+  }
+}
+
+// ── Notification helpers ─────────────────────────────────────────────────────
+
+export async function notifyBoardInvite(
+  inviteeId: number,
+  inviterId: number,
+  inviterName: string,
+  boardId: number
+): Promise<void> {
+  if (inviteeId === inviterId) return;
+  const boardName = await getBoardName(boardId);
+
+  // Push full board object to invitee's dashboard socket so it appears instantly
+  try {
+    const boardResult = await executeRead(
+      `SELECT
+         b.id,
+         b.title,
+         b.description,
+         b.background_color  AS "backgroundColor",
+         b.created_by        AS "createdBy",
+         b.created_at        AS "createdAt",
+         u.name              AS "ownerName",
+         (SELECT COUNT(*)::int FROM board_members bm WHERE bm.board_id = b.id) AS "memberCount"
+       FROM boards b
+       JOIN users u ON b.created_by = u.id
+       WHERE b.id = $1`,
+      [boardId]
+    );
+
+    const sockets = userSockets.get(inviteeId);
+    console.log(`[Notifications] board-invited: inviteeId=${inviteeId}, sockets=${sockets?.size ?? 0}`);
+
+    if (boardResult.rows[0] && sockets && sockets.size > 0) {
+      const board = boardResult.rows[0]; // already camelCase via column aliases
+      for (const socketId of sockets) {
+        console.log(`[Notifications] emitting board-invited to socket ${socketId}`, board.title);
+        _io?.to(socketId).emit('board-invited', { board });
+      }
+    }
+  } catch (err) {
+    console.error('[Notifications] Failed to push board-invited:', err);
+  }
+
+  await createNotification({
+    userId: inviteeId,
+    boardId,
+    type: 'board_invite',
+    title: 'You were invited to a board',
+    message: `${inviterName} invited you to "${boardName}"`,
+    link: `/board/${boardId}`,
+  });
+}
+
 export async function notifyCardAssignment(
   assigneeId: number,
   assignerId: number,
@@ -47,21 +161,19 @@ export async function notifyCardAssignment(
   cardId: number,
   cardTitle: string
 ): Promise<void> {
-  // Don't notify if user assigned themselves
   if (assigneeId === assignerId) return;
-
+  const boardName = await getBoardName(boardId);
   await createNotification({
     userId: assigneeId,
     boardId,
     cardId,
     type: 'assigned',
     title: 'You were assigned to a card',
-    message: `${assignerName} assigned you to "${cardTitle}"`,
+    message: `${assignerName} assigned you to "${cardTitle}" on "${boardName}"`,
     link: `/board/${boardId}`,
   });
 }
 
-// Helper: Notify when someone comments on your card
 export async function notifyCardComment(
   assigneeIds: number[],
   commenterId: number,
@@ -70,23 +182,21 @@ export async function notifyCardComment(
   cardId: number,
   cardTitle: string
 ): Promise<void> {
+  const boardName = await getBoardName(boardId);
   for (const assigneeId of assigneeIds) {
-    // Don't notify the commenter
     if (assigneeId === commenterId) continue;
-
     await createNotification({
       userId: assigneeId,
       boardId,
       cardId,
       type: 'comment_added',
       title: 'New comment on your card',
-      message: `${commenterName} commented on "${cardTitle}"`,
+      message: `${commenterName} commented on "${cardTitle}" in "${boardName}"`,
       link: `/board/${boardId}`,
     });
   }
 }
 
-// Helper: Notify when a card you're assigned to is moved
 export async function notifyCardMoved(
   assigneeIds: number[],
   moverId: number,
@@ -97,17 +207,16 @@ export async function notifyCardMoved(
   fromList: string,
   toList: string
 ): Promise<void> {
+  const boardName = await getBoardName(boardId);
   for (const assigneeId of assigneeIds) {
-    // Don't notify the person who moved it
     if (assigneeId === moverId) continue;
-
     await createNotification({
       userId: assigneeId,
       boardId,
       cardId,
       type: 'card_moved',
       title: 'Card moved',
-      message: `${moverName} moved "${cardTitle}" from ${fromList} to ${toList}`,
+      message: `${moverName} moved "${cardTitle}" from "${fromList}" to "${toList}" in "${boardName}"`,
       link: `/board/${boardId}`,
     });
   }
