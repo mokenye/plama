@@ -104,6 +104,10 @@ interface BoardState {
   moveCard: (cardId: number, newListId: number, newPosition: number) => void;
   removeCard: (cardId: number) => void;
 
+  // Reordering
+  reorderCards: (listId: number, cardIds: number[]) => void;
+  moveList: (listId: number, newPosition: number) => void;
+
   // Optimistic updates
   addOptimisticCard: (card: OptimisticCard) => void;
   confirmOptimisticCard: (tempId: string, realCard: Card) => void;
@@ -178,6 +182,28 @@ export const useBoardStore = create<BoardState>((set) => ({
 
   removeCard: (cardId) =>
     set((state) => ({ cards: state.cards.filter((c) => c.id !== cardId) })),
+
+  reorderCards: (listId, cardIds) =>
+    set((state) => ({
+      cards: state.cards.map((c) => {
+        if (c.listId !== listId) return c;
+        const idx = cardIds.indexOf(c.id);
+        return idx === -1 ? c : { ...c, position: idx };
+      }),
+    })),
+
+  moveList: (listId, newPosition) =>
+    set((state) => {
+      const sorted = [...state.lists].sort((a, b) => a.position - b.position);
+      const oldIdx = sorted.findIndex((l) => l.id === listId);
+      if (oldIdx === -1) return {};
+      const reordered = [...sorted];
+      const [moved] = reordered.splice(oldIdx, 1);
+      reordered.splice(newPosition, 0, moved);
+      return {
+        lists: reordered.map((l, i) => ({ ...l, position: i })),
+      };
+    }),
 
   // Optimistic updates
   addOptimisticCard: (card) =>
