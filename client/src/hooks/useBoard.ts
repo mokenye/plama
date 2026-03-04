@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { boardsApi, listsApi } from '../services/api';
+import { boardsApi, listsApi, cardsApi } from '../services/api';
 import {
   initSocket,
   joinBoard,
@@ -11,12 +11,14 @@ import {
   emitCardMoved,
   emitCardDeleted,
   emitListDeleted,
+  emitCardsReordered,
+  emitListMoved,
   emitUserAway,
   emitUserActive,
   isSocketInitialized,
 } from '../services/socket';
 import { useBoardStore, useAuthStore } from '../store';
-import type { OptimisticCard } from '../types';
+import type { OptimisticCard, Card } from '../types';
 
 // ================================
 // useBoard - main hook for board page
@@ -147,9 +149,16 @@ export const useBoard = (boardId: number) => {
   );
 
   const updateCard = useCallback(
-    (cardId: number, updates: { title?: string; description?: string }) => {
+    (cardId: number, updates: {
+      title?: string;
+      description?: string;
+      dueDate?: string | null;
+      labels?: string[];
+      assignees?: number[];
+    }) => {
       if (!board) return;
-      useBoardStore.getState().updateCard(cardId, updates);
+      // Cast needed because Card.dueDate is string|undefined but we allow null to clear it
+      useBoardStore.getState().updateCard(cardId, updates as Partial<Card>);
       emitCardUpdated({ cardId, ...updates, boardId: board.id });
     },
     [board]
@@ -199,11 +208,32 @@ export const useBoard = (boardId: number) => {
     [board]
   );
 
+  const reorderCards = useCallback(
+    (listId: number, cardIds: number[]) => {
+      if (!board) return;
+      // Optimistic update
+      useBoardStore.getState().reorderCards(listId, cardIds);
+      // Persist + broadcast
+      cardsApi.reorder(board.id, listId, cardIds).catch(console.error);
+      emitCardsReordered({ listId, cardIds, boardId: board.id });
+    },
+    [board]
+  );
+
+  const moveList = useCallback(
+    (listId: number, newPosition: number, oldPosition: number) => {
+      if (!board) return;
+      useBoardStore.getState().moveList(listId, newPosition);
+      listsApi.reorder(board.id, listId, newPosition).catch(console.error);
+      emitListMoved({ listId, newPosition, oldPosition, boardId: board.id });
+    },
+    [board]
+  );
   const deleteList = useCallback(
     (listId: number) => {
       if (!board) return;
 
-      const cardsInList = cards.filter(c => c.listId === listId);
+      const cardsInList = cards.filter((c: Card) => c.listId === listId);
       const cardCount = cardsInList.length;
 
       const confirmed = confirm(
@@ -241,6 +271,8 @@ export const useBoard = (boardId: number) => {
     updateCard,
     moveCard,
     deleteCard,
+    reorderCards,
+    moveList,
     createList,
     deleteList,
   };
