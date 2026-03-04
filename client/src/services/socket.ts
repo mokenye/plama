@@ -28,18 +28,19 @@ export const getSocket = (): Socket => {
 };
 
 export const initSocket = (token: string): Socket => {
-  if (socket?.connected) {
-    console.log('[Socket] Already connected, reusing existing socket');
+  // If we already have a socket (connected or connecting), reuse it
+  if (socket) {
+    console.log('[Socket] Reusing existing socket, connected:', socket.connected);
     return socket;
   }
 
   console.log('[Socket] Initializing new socket connection...');
-  
+
   socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
     auth: { token },
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 10,
     reconnectionDelay: 1000,
     timeout: 10000,
     transports: ['websocket', 'polling'],
@@ -72,12 +73,24 @@ export const disconnectSocket = () => {
 // Board Room Management
 // ================================
 export const joinBoard = (boardId: number) => {
-  console.log('[Socket] Joining board:', boardId);
-  getSocket().emit('join-board', { boardId });
+  const s = socket;
+  if (!s) return;
+
+  if (s.connected) {
+    console.log('[Socket] Joining board:', boardId);
+    s.emit('join-board', { boardId });
+  } else {
+    // Socket is connecting — join as soon as it connects
+    console.log('[Socket] Queuing join-board until connected:', boardId);
+    s.once('connect', () => {
+      console.log('[Socket] Deferred join-board:', boardId);
+      s.emit('join-board', { boardId });
+    });
+  }
 };
 
 export const leaveBoard = (boardId: number) => {
-  getSocket().emit('leave-board', { boardId });
+  socket?.emit('leave-board', { boardId });
 };
 
 // ================================
@@ -109,6 +122,9 @@ export const emitCardUpdated = (data: {
   cardId: number;
   title?: string;
   description?: string;
+  dueDate?: string | null;
+  labels?: string[];
+  assignees?: number[];
   boardId: number;
 }) => {
   getSocket().emit('card-updated', data);
@@ -134,6 +150,23 @@ export const emitCardDeleted = (data: {
   getSocket().emit('card-deleted', data);
 };
 
+export const emitCardsReordered = (data: {
+  listId: number;
+  cardIds: number[];
+  boardId: number;
+}) => {
+  getSocket().emit('cards-reordered', data);
+};
+
+export const emitListMoved = (data: {
+  listId: number;
+  newPosition: number;
+  oldPosition: number;
+  boardId: number;
+}) => {
+  getSocket().emit('list-moved', data);
+};
+
 export const emitListDeleted = (data: {
   listId: number;
   boardId: number;
@@ -149,118 +182,164 @@ export const emitCursorMove = (data: { boardId: number; x: number; y: number }) 
 // Event Listener Setup
 // ================================
 export const bindBoardEvents = (boardId: number) => {
-  console.log('[Socket] Binding events for board:', boardId);
+  console.log('[Socket] bindBoardEvents called for board:', boardId, '| socket id:', socket?.id, '| connected:', socket?.connected);
+
+  // Always unbind first to prevent duplicate listeners from re-mounts
+  unbindBoardEventsInternal();
+
   const store = useBoardStore.getState;
   const s = getSocket();
 
-  // Connection state
-  s.on('connect', () => {
-    console.log('[Socket] Reconnected, rejoining board');
+  // ---- Connection state ----
+  const onConnect = () => {
+    console.log('[Socket] Reconnected, rejoining board', boardId);
     store().setConnectionStatus('connected');
-    joinBoard(boardId);
-  });
+    s.emit('join-board', { boardId });
+  };
+  const onDisconnect = () => store().setConnectionStatus('disconnected');
+  const onReconnecting = () => store().setConnectionStatus('reconnecting');
 
-  s.on('disconnect', () => {
-    store().setConnectionStatus('disconnected');
-  });
-
-  s.on('reconnecting', () => {
-    store().setConnectionStatus('reconnecting');
-  });
+  s.on('connect', onConnect);
+  s.on('disconnect', onDisconnect);
+  s.on('reconnecting', onReconnecting);
 
   // ---- Card Events ----
-  s.on('card-created', ({ card, tempId }: SocketCard) => {
-    console.log('[Socket] Received card-created:', { card, tempId });
-    if (tempId) {
-      // Preserve createdByName from the optimistic card — the server response
-      // may not include it if the JOIN wasn't done in the RETURNING clause
-      const optimistic = store().cards.find(
-        (c: any) => c.tempId === tempId
-      );
-      const confirmedCard = {
+  const onCardCreated = ({ card, tempId }: SocketCard) => {
+    const optimistic = tempId
+      ? store().cards.find((c: any) => c.tempId === tempId)
+      : undefined;
+
+    console.log('[Socket] card-created received', {
+      cardId: card?.id,
+      tempId,
+      isOwnOptimistic: !!optimistic,
+      currentCards: store().cards.length,
+    });
+
+    if (optimistic && tempId) {
+      // This is our own card being confirmed by the server
+      store().confirmOptimisticCard(tempId, {
         ...card,
-        createdByName: card.createdByName ?? optimistic?.createdByName,
-      };
-      store().confirmOptimisticCard(tempId, confirmedCard);
+        createdByName: card.createdByName ?? optimistic.createdByName,
+      });
     } else {
-      // New card from another user — createdByName comes from server
+      // New card from another user (or server broadcast with tempId we don't own)
       store().addCard(card);
     }
-  });
+  };
 
-  s.on('card-updated', ({ card }: SocketCard) => {
-    store().updateCard(card.id, card);
-  });
+  const onCardUpdated = (payload: any) => {
+    if (payload.card) {
+      store().updateCard(payload.card.id, payload.card);
+    } else if (payload.cardId) {
+      const { cardId, boardId: _b, ...updates } = payload;
+      store().updateCard(cardId, updates);
+    }
+  };
 
-  s.on('card-moved', ({ cardId, newListId, newPosition }: SocketCardMoved) => {
+  const onCardMoved = ({ cardId, newListId, newPosition }: SocketCardMoved) => {
     console.log('[Socket] Received card-moved:', { cardId, newListId, newPosition });
     store().moveCard(cardId, newListId, newPosition);
-  });
+  };
 
-  s.on('card-deleted', ({ cardId }: SocketCardDeleted) => {
+  const onCardDeleted = ({ cardId }: SocketCardDeleted) => {
     store().removeCard(cardId);
-  });
+  };
 
-  s.on('list-deleted', ({ listId }: { listId: number }) => {
+  const onListDeleted = ({ listId }: { listId: number }) => {
     console.log('[Socket] Received list-deleted:', listId);
     store().removeList(listId);
-  });
+  };
 
-  // Error handling / rollbacks
-  s.on('card-error', ({ tempId, cardId, type }: SocketError) => {
-    if (type === 'card-created' && tempId) {
-      store().rollbackOptimisticCard(tempId);
-    }
+  const onCardError = ({ tempId, cardId, type }: SocketError) => {
+    if (type === 'card-created' && tempId) store().rollbackOptimisticCard(tempId);
     console.error(`Socket error for ${type} ${cardId || tempId}`);
-  });
+  };
 
-  s.on('card-move-failed', ({ cardId, oldListId, oldPosition }: SocketCardMoveFailed) => {
+  const onCardMoveFailed = ({ cardId, oldListId, oldPosition }: SocketCardMoveFailed) => {
     store().rollbackCardMove(cardId, oldListId, oldPosition);
-  });
+  };
 
   // ---- Presence Events ----
-  s.on('active-users', ({ users }: SocketActiveUsers) => {
+  const onActiveUsers = ({ users }: SocketActiveUsers) => {
     console.log('[Socket] Received active-users:', users);
     store().setActiveUsers(users);
-  });
+  };
 
-  s.on('user-joined', ({ user }: SocketUserJoined) => {
+  const onUserJoined = ({ user }: SocketUserJoined) => {
     console.log('[Socket] User joined:', user);
     store().addActiveUser({ ...user, joinedAt: Date.now() });
-  });
+  };
 
-  s.on('user-left', ({ userId }: SocketUserLeft) => {
+  const onUserLeft = ({ userId }: SocketUserLeft) => {
     console.log('[Socket] User left:', userId);
     store().removeActiveUser(userId);
-  });
+  };
 
-  // Away state — another user went away or came back
-  s.on('user-away', ({ userId }: { userId: number }) => {
-    store().setUserAway(userId, true);
-  });
+  const onCardsReordered = ({ listId, cardIds }: { listId: number; cardIds: number[] }) => {
+    store().reorderCards(listId, cardIds);
+  };
 
-  s.on('user-active', ({ userId }: { userId: number }) => {
-    store().setUserAway(userId, false);
-  });
+  const onListMoved = ({ listId, newPosition }: { listId: number; newPosition: number }) => {
+    store().moveList(listId, newPosition);
+  };
+
+  const onUserAway = ({ userId }: { userId: number }) => store().setUserAway(userId, true);
+  const onUserActive = ({ userId }: { userId: number }) => store().setUserAway(userId, false);
+
+  s.on('card-created',     onCardCreated);
+  s.on('card-updated',     onCardUpdated);
+  s.on('card-moved',       onCardMoved);
+  s.on('card-deleted',     onCardDeleted);
+  s.on('list-deleted',     onListDeleted);
+  s.on('cards-reordered',  onCardsReordered);
+  s.on('list-moved',       onListMoved);
+  s.on('card-error',       onCardError);
+  s.on('card-move-failed',onCardMoveFailed);
+  s.on('active-users',    onActiveUsers);
+  s.on('user-joined',     onUserJoined);
+  s.on('user-left',       onUserLeft);
+  s.on('user-away',       onUserAway);
+  s.on('user-active',     onUserActive);
+
+  // Store all named refs for clean removal
+  (s as any)._boardHandlers = {
+    onConnect, onDisconnect, onReconnecting,
+    onCardCreated, onCardUpdated, onCardMoved, onCardDeleted, onListDeleted,
+    onCardsReordered, onListMoved,
+    onCardError, onCardMoveFailed,
+    onActiveUsers, onUserJoined, onUserLeft, onUserAway, onUserActive,
+  };
 };
 
-export const unbindBoardEvents = () => {
+// Internal — removes only named board handlers, not initSocket's listeners
+const unbindBoardEventsInternal = () => {
   const s = socket;
   if (!s) return;
 
-  s.off('connect');
-  s.off('disconnect');
-  s.off('reconnecting');
-  s.off('card-created');
-  s.off('card-updated');
-  s.off('card-moved');
-  s.off('card-deleted');
-  s.off('card-error');
-  s.off('card-move-failed');
-  s.off('active-users');
-  s.off('user-joined');
-  s.off('user-left');
-  s.off('user-away');
-  s.off('user-active');
-  s.off('cursor-update');
+  const h = (s as any)._boardHandlers;
+  if (!h) return;
+
+  s.off('connect',          h.onConnect);
+  s.off('disconnect',       h.onDisconnect);
+  s.off('reconnecting',     h.onReconnecting);
+  s.off('card-created',     h.onCardCreated);
+  s.off('card-updated',     h.onCardUpdated);
+  s.off('card-moved',       h.onCardMoved);
+  s.off('card-deleted',     h.onCardDeleted);
+  s.off('list-deleted',     h.onListDeleted);
+  s.off('cards-reordered',  h.onCardsReordered);
+  s.off('list-moved',       h.onListMoved);
+  s.off('card-error',       h.onCardError);
+  s.off('card-move-failed', h.onCardMoveFailed);
+  s.off('active-users',     h.onActiveUsers);
+  s.off('user-joined',      h.onUserJoined);
+  s.off('user-left',        h.onUserLeft);
+  s.off('user-away',        h.onUserAway);
+  s.off('user-active',      h.onUserActive);
+
+  delete (s as any)._boardHandlers;
 };
+
+// Public — called from useBoard cleanup
+export const unbindBoardEvents = unbindBoardEventsInternal;
