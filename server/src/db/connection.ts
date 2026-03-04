@@ -65,6 +65,34 @@ export const executeWrite = async (query: string, params: any[] = []) => {
 };
 
 // ================================
+// Transaction Helper
+// Checks out a dedicated client from the write pool, runs all queries
+// atomically — if any query throws, the whole transaction rolls back.
+// Usage: await executeTransaction(async (client) => {
+//   await client.query('UPDATE ...', [...]);
+//   await client.query('UPDATE ...', [...]);
+// });
+// ================================
+export const executeTransaction = async <T>(
+  fn: (client: import('pg').PoolClient) => Promise<T>
+): Promise<T> => {
+  const client = await writePool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    logger.debug('DB transaction committed');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error({ error }, 'DB transaction rolled back');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// ================================
 // Health Check
 // ================================
 export const testDatabaseConnection = async () => {
@@ -87,8 +115,8 @@ export const schema = `
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
     avatar_url VARCHAR(500),
-    created_at TIMESTAMPZ DEFAULT NOW(),
-    updated_at TIMESTAMPZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS boards (
@@ -97,8 +125,8 @@ export const schema = `
     description TEXT,
     owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     background_color VARCHAR(7) DEFAULT '#0052CC',
-    created_at TIMESTAMPZ DEFAULT NOW(),
-    updated_at TIMESTAMPZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS board_members (
@@ -106,7 +134,7 @@ export const schema = `
     board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20) DEFAULT 'member',
-    joined_at TIMESTAMPZ DEFAULT NOW(),
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(board_id, user_id)
   );
 
@@ -115,7 +143,7 @@ export const schema = `
     board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     position INTEGER NOT NULL,
-    created_at TIMESTAMPZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
   );
 
   CREATE TABLE IF NOT EXISTS cards (
@@ -125,9 +153,9 @@ export const schema = `
     description TEXT,
     position INTEGER NOT NULL,
     created_by INTEGER REFERENCES users(id),
-    due_date TIMESTAMPZ,
-    created_at TIMESTAMPZ DEFAULT NOW(),
-    updated_at TIMESTAMPZ DEFAULT NOW()
+    due_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
   );
 
   -- Performance indexes
