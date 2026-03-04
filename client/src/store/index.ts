@@ -120,6 +120,10 @@ interface BoardState {
   removeActiveUser: (userId: number) => void;
   setUserAway: (userId: number, away: boolean) => void;
 
+  // Member mutations
+  addMember: (member: BoardMember) => void;
+  removeMember: (userId: number) => void;
+
   // UI state
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting') => void;
   setLoading: (loading: boolean) => void;
@@ -204,6 +208,16 @@ export const useBoardStore = create<BoardState>((set) => ({
         lists: reordered.map((l, i) => ({ ...l, position: i })),
       };
     }),
+
+  // Members
+  addMember: (member) =>
+    set((state) => ({
+      members: state.members.some(m => m.id === member.id) // deduplication logic
+        ? state.members
+        : [...state.members, member],
+    })),
+  removeMember: (userId) =>
+    set((state) => ({ members: state.members.filter(m => m.id !== userId) })),
 
   // Optimistic updates
   addOptimisticCard: (card) =>
