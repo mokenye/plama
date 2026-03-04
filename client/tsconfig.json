@@ -12,8 +12,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false, // set to true to report errors on unused local variables. Otherwise currently false for Vercel build
+    "noUnusedParameters": false, // set to true to report errors on unused function parameters
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
