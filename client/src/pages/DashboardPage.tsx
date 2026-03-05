@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { boardsApi } from '../services/api'
+import type { Board } from '../types'
 import { useAuthStore, useBoardsStore } from '../store'
 import NotificationBell from '../components/Notifications/NotificationBell'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
@@ -93,37 +94,27 @@ export default function DashboardPage() {
     loadBoards()
   }, [])
 
-  // Real-time: when a board_invite notification arrives via socket,
-  // refetch boards so the new board appears immediately.
-  // We reuse the 'notification' event (same one the bell uses) since it's
-  // already proven to reach the client — avoids needing a separate socket room.
+  // Real-time: board appears/disappears instantly when invited/removed
   useEffect(() => {
     if (!token) return
     initSocket(token)
     let s: ReturnType<typeof getSocket> | null = null
     try { s = getSocket() } catch { return }
 
-    const onNotification = async (notification: { type: string }) => {
-      if (notification.type === 'board_invite') {
-        try {
-          const { boards } = await boardsApi.getAll()
-          setBoards(boards)
-        } catch (err) {
-          console.error('[Dashboard] Failed to reload boards after invite:', err)
-        }
-      }
+    const onBoardInvited = ({ board }: { board: Board }) => {
+      addBoard(board)
     }
     const onBoardRemoved = ({ boardId }: { boardId: number }) => {
       removeBoard(boardId)
     }
 
-    s.on('notification', onNotification)
+    s.on('board-invited', onBoardInvited)
     s.on('board-removed', onBoardRemoved)
     return () => {
-      s?.off('notification', onNotification)
+      s?.off('board-invited', onBoardInvited)
       s?.off('board-removed', onBoardRemoved)
     }
-  }, [token, setBoards, removeBoard])
+  }, [token, addBoard, removeBoard])
 
   useKeyboardShortcuts([
     { key: '?', description: 'Show keyboard shortcuts', handler: () => setShowShortcutsHelp(true) },
@@ -275,7 +266,7 @@ export default function DashboardPage() {
               {ownedBoards.length > 0 && (
                 <section>
                   {sharedBoards.length > 0 && (
-                    <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-4">Owned</h3>
+                    <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-4">Your boards</h3>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {ownedBoards.map(board => <BoardCard key={board.id} board={board} />)}
