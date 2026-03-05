@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { notifyCardComment } from '../utils/notifications';
+import { notifyCardComment, getIo } from '../utils/notifications';
+import { logger } from '../utils/logger';
 
 const router = Router();
 router.use(authenticate);
@@ -32,7 +33,7 @@ router.get('/:cardId/comments', async (req: AuthRequest, res: Response) => {
 
     res.json({ comments });
   } catch (error) {
-    console.error('[Comments API] Get error:', error);
+    logger.error({ error }, '[Comments API] Get error');
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
 });
@@ -80,6 +81,12 @@ router.post('/:cardId/comments', async (req: AuthRequest, res: Response) => {
     if (cardResult.rows.length > 0) {
       const { title: cardTitle, assignees, board_id: boardId } = cardResult.rows[0];
 
+      // Broadcast to all users viewing this board in real time
+      const io = getIo()
+      if (io) {
+        io.to(`board:${boardId}`).emit('comment-added', { comment })
+      }
+
       if (assignees && assignees.length > 0) {
         notifyCardComment(
           assignees,
@@ -88,13 +95,13 @@ router.post('/:cardId/comments', async (req: AuthRequest, res: Response) => {
           boardId,
           cardId,
           cardTitle
-        ).catch((err) => console.error('[Comments API] Notification error:', err));
+        ).catch((err) => logger.error({ err }, '[Comments API] Notification error'));
       }
     }
 
     res.status(201).json({ comment });
   } catch (error) {
-    console.error('[Comments API] Create error:', error);
+    logger.error({ error }, '[Comments API] Create error');
     res.status(500).json({ error: 'Failed to create comment' });
   }
 });
@@ -104,9 +111,13 @@ router.delete('/:cardId/comments/:commentId', async (req: AuthRequest, res: Resp
   try {
     const commentId = parseInt(req.params.commentId);
 
-    // Check if user owns the comment
+    // Single query: check ownership and get boardId + cardId for socket emit
     const check = await executeRead(
-      'SELECT user_id FROM card_comments WHERE id = $1',
+      `SELECT cc.user_id, cc.card_id, l.board_id
+       FROM card_comments cc
+       JOIN cards c ON cc.card_id = c.id
+       JOIN lists l ON c.list_id = l.id
+       WHERE cc.id = $1`,
       [commentId]
     );
 
@@ -120,9 +131,15 @@ router.delete('/:cardId/comments/:commentId', async (req: AuthRequest, res: Resp
 
     await executeWrite('DELETE FROM card_comments WHERE id = $1', [commentId]);
 
+    const { board_id: boardId, card_id: cardId } = check.rows[0];
+    const io = getIo()
+    if (io) {
+      io.to(`board:${boardId}`).emit('comment-deleted', { commentId, cardId })
+    }
+
     res.json({ message: 'Comment deleted' });
   } catch (error) {
-    console.error('[Comments API] Delete error:', error);
+    logger.error({ error }, '[Comments API] Delete error');
     res.status(500).json({ error: 'Failed to delete comment' });
   }
 });
