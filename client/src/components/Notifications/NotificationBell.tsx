@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../../services/socket'
+import { apiBase } from '../../services/api'
 
 interface Notification {
   id: number
@@ -44,7 +45,7 @@ export default function NotificationBell() {
   // ── Fetch helpers ──────────────────────────────────────────────────────
   const loadUnreadCount = async () => {
     try {
-      const res = await fetch('/api/notifications/unread-count', {
+      const res = await fetch(`${apiBase}/notifications/unread-count`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       })
       if (res.ok) {
@@ -58,7 +59,7 @@ export default function NotificationBell() {
 
   const loadNotifications = async () => {
     try {
-      const res = await fetch('/api/notifications?limit=20', {
+      const res = await fetch(`${apiBase}/notifications?limit=20`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       })
       if (res.ok) {
@@ -73,7 +74,7 @@ export default function NotificationBell() {
 
   const markAsRead = async (id: number) => {
     try {
-      await fetch(`/api/notifications/${id}/read`, {
+      await fetch(`${apiBase}/notifications/${id}/read`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${getToken()}` },
       })
@@ -86,7 +87,7 @@ export default function NotificationBell() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/mark-all-read', {
+      await fetch(`${apiBase}/notifications/mark-all-read`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
       })
@@ -100,7 +101,7 @@ export default function NotificationBell() {
   const deleteNotification = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation()
     try {
-      await fetch(`/api/notifications/${id}`, {
+      await fetch(`${apiBase}/notifications/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${getToken()}` },
       })
