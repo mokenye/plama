@@ -8,6 +8,11 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Use this in raw fetch() calls so they hit the correct backend in production
+export const apiBase = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api'
+
 // Attach JWT token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -93,11 +98,6 @@ export const listsApi = {
     const res = await api.delete(`/boards/${boardId}/lists/${listId}`);
     return res.data;
   },
-
-  reorder: async (boardId: number, listId: number, newPosition: number) => {
-    const res = await api.patch(`/boards/${boardId}/lists/${listId}/reorder`, { position: newPosition });
-    return res.data;
-  },
 };
 
 // ================================
@@ -105,7 +105,7 @@ export const listsApi = {
 // ================================
 export const cardsApi = {
   reorder: async (boardId: number, listId: number, cardIds: number[]) => {
-    const res = await api.patch(`/boards/${boardId}/lists/${listId}/cards/reorder`, { cardIds });
+    const res = await api.post(`/boards/${boardId}/lists/${listId}/reorder`, { cardIds });
     return res.data;
   },
 };
