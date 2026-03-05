@@ -42,10 +42,14 @@ export default function RegisterPage() {
       }} />
 
       <div className="relative z-10 w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2 mb-10">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center font-black text-sm text-white">P</div>
-          <span className="text-base font-bold tracking-tight text-white/70">plama</span>
-        </div>
+        <Link to="/">
+          <div className="flex items-center justify-center gap-2 mb-10 cursor-pointer">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center font-black text-sm text-white">
+              P
+            </div>
+            <span className="text-base font-bold tracking-tight text-white/70">plama</span>
+          </div>
+        </Link>
 
         <div className="rounded-2xl border border-white/[0.07] p-8"
           style={{ background: 'linear-gradient(160deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)' }}>
