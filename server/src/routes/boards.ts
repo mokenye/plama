@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { transformBoard, transformList, transformCard, transformMember } from '../utils/transform';
+import { getIo } from '../utils/notifications';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -154,7 +156,7 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     const boardId = parseInt(req.params.id);
     const { title, background_color } = req.body;
 
-    // Check access
+    // Check access — owner only
     const access = await executeRead(
       `SELECT role FROM board_members WHERE board_id = $1 AND user_id = $2`,
       [boardId, req.userId]
@@ -162,6 +164,10 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
 
     if (access.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (access.rows[0].role !== 'owner') {
+      return res.status(403).json({ error: 'Only the board owner can update board settings' });
     }
 
     // Build update query dynamically
@@ -191,9 +197,21 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       values
     );
 
-    res.json({ board: transformBoard(result.rows[0]) });
+    const board = transformBoard(result.rows[0]);
+
+    // Broadcast to all users currently viewing this board
+    const io = getIo()
+    if (io) {
+      io.to(`board:${boardId}`).emit('board-updated', {
+        boardId,
+        title: board.title,
+        backgroundColor: board.backgroundColor,
+      })
+    }
+
+    res.json({ board });
   } catch (error) {
-    console.error('[Boards API] Update error:', error);
+    logger.error({ error }, '[Boards API] Update error');
     res.status(500).json({ error: 'Failed to update board' });
   }
 });
