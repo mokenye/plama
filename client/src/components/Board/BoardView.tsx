@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -16,11 +16,30 @@ import {
   horizontalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable'
+import { throttle } from 'lodash'
+import { emitCursorMove, bindCursorHandler, unbindCursorHandler, type CursorPayload } from '../../services/socket'
 import type { List, Card } from '../../types'
 import ListColumn from './ListColumn'
 import SortableList from './SortableList'
 
+// Assign a consistent color to each remote user's cursor
+const CURSOR_COLORS = [
+  '#6366F1', '#EC4899', '#10B981', '#F59E0B',
+  '#3B82F6', '#EF4444', '#8B5CF6', '#14B8A6',
+]
+const colorForUser = (userId: number) => CURSOR_COLORS[userId % CURSOR_COLORS.length]
+
+interface RemoteCursor {
+  userId: number
+  userName: string
+  x: number  // % of board container width
+  y: number  // % of board container height
+  updatedAt: number
+}
+
 interface BoardViewProps {
+  boardId: number
+  currentUserId: number
   lists: List[]
   cards: Card[]
   boardMembers: { id: number; name: string; email: string }[]
@@ -39,6 +58,8 @@ interface BoardViewProps {
 type DragType = 'card' | 'list' | null
 
 export default function BoardView({
+  boardId,
+  currentUserId,
   lists,
   cards,
   boardMembers,
@@ -64,6 +85,56 @@ export default function BoardView({
   const orderedLists = localListOrder
     ? localListOrder.map(id => lists.find(l => l.id === id)!).filter(Boolean)
     : [...lists].sort((a, b) => a.position - b.position)
+
+  // ── Cursor tracking ────────────────────────────────────────────────────────
+  const [cursors, setCursors] = useState<Map<number, RemoteCursor>>(new Map())
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Throttled emit — fires at most every 30ms
+  const emitThrottled = useCallback(
+    throttle((x: number, y: number) => {
+      emitCursorMove({ boardId, x, y })
+    }, 30),
+    [boardId]
+  )
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    emitThrottled(
+      ((e.clientX - rect.left) / rect.width) * 100,
+      ((e.clientY - rect.top) / rect.height) * 100,
+    )
+  }, [emitThrottled])
+
+  // Bind cursor-update listener for the lifetime of this board view
+  useEffect(() => {
+    const handler = (data: CursorPayload) => {
+      if (data.userId === currentUserId) return // ignore our own echo
+      setCursors(prev => {
+        const next = new Map(prev)
+        next.set(data.userId, { ...data, updatedAt: Date.now() })
+        return next
+      })
+    }
+    bindCursorHandler(handler)
+    return () => unbindCursorHandler(handler)
+  }, [currentUserId])
+
+  // Expire cursors that haven't moved in 5s (user left / went idle)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now()
+      setCursors(prev => {
+        const stale = [...prev.values()].filter(c => now - c.updatedAt > 5000)
+        if (stale.length === 0) return prev
+        const next = new Map(prev)
+        stale.forEach(c => next.delete(c.userId))
+        return next
+      })
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -188,10 +259,48 @@ export default function BoardView({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="h-full overflow-x-auto overflow-y-hidden">
-        <div className="p-4 h-full">
-        <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
-          <div className="flex gap-4 h-full items-stretch" style={{ minWidth: 'max-content' }}>
+      {/* Scroll hint — fades right edge when there's more to scroll */}
+      <div
+        ref={containerRef}
+        className="relative h-full flex flex-col"
+        onMouseMove={handleMouseMove}
+      >
+        {/* Remote cursors overlay */}
+        {[...cursors.values()].map(cursor => (
+          <div
+            key={cursor.userId}
+            className="pointer-events-none absolute z-50 flex items-center gap-1"
+            style={{
+              left: `${cursor.x}%`,
+              top: `${cursor.y}%`,
+              transform: 'translate(-50%, -50%)',
+              transition: 'left 80ms linear, top 80ms linear',
+            }}
+          >
+            {/* Dot with ping */}
+            <div className="relative flex-shrink-0">
+              <span
+                className="absolute inline-flex h-1.5 w-1.5 rounded-full opacity-50 animate-ping"
+                style={{ backgroundColor: colorForUser(cursor.userId) }}
+              />
+              <span
+                className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: colorForUser(cursor.userId) }}
+              />
+            </div>
+            {/* Name — no background, just colored text */}
+            <span
+              className="text-xs font-medium whitespace-nowrap"
+              style={{ color: colorForUser(cursor.userId) }}
+            >
+              {(cursor.userName ?? '?').split(' ')[0]}
+            </span>
+          </div>
+        ))}
+        <div className="h-full overflow-x-auto overflow-y-hidden" id="board-scroll-area">
+          <div className="p-3 sm:p-4 h-full">
+            <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
+              <div className="flex gap-3 sm:gap-4 h-full items-stretch" style={{ minWidth: 'max-content' }}>
             {orderedLists.map((list, index) => (
               <SortableList key={list.id} id={`list-${list.id}`}>
                 {(dragHandleProps) => (
@@ -201,6 +310,8 @@ export default function BoardView({
                     cards={getCardsForList(list.id)}
                     boardMembers={boardMembers}
                     boardLabels={boardLabels}
+                    boardId={boardId}
+                    currentUserId={currentUserId}
                     dragHandleProps={dragHandleProps}
                     onCreateCard={onCreateCard}
                     onUpdateCard={onUpdateCard}
@@ -245,9 +356,12 @@ export default function BoardView({
                 </button>
               )}
             </div>
+              </div>
+            </SortableContext>
           </div>
-        </SortableContext>
         </div>
+        {/* Right-edge fade hint — purely decorative, tells user there's more to scroll */}
+        <div className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-black/20 to-transparent" />
       </div>
 
       <DragOverlay>
