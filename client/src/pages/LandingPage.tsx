@@ -52,11 +52,18 @@ export default function LandingPage() {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!heroRef.current) return
-      const x = (e.clientX / window.innerWidth  - 0.5) * 10
-      const y = (e.clientY / window.innerHeight - 0.5) * 6
-      heroRef.current.style.transform = `translate(${x}px, ${y}px)`
+    if (!heroRef.current) return
+
+    const x = (e.clientX / window.innerWidth - 0.5)
+    const y = (e.clientY / window.innerHeight - 0.5)
+
+    const rotateX = y * -10
+    const rotateY = x * 12
+
+    heroRef.current.style.transform =
+      `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(20px)`
     }
+
     window.addEventListener('mousemove', handler)
     return () => window.removeEventListener('mousemove', handler)
   }, [])
@@ -105,15 +112,11 @@ export default function LandingPage() {
 
         <div className="max-w-3xl">
           <h1
-            className="text-5xl sm:text-[70px] font-black tracking-tight leading-[1.02] mb-8 text-white/90"
-            style={{
-              fontFamily: "'Georgia', 'Times New Roman', serif",
-              animation: 'fadeUp 0.5s 0.04s ease both',
-            }}
+            className="text-5xl sm:text-[64px] lg:text-[72px] font-bold tracking-[-0.02em] leading-[0.95] mb-8 text-white/85"
+            style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
           >
-            Your work,<br />
-            beautifully<br />
-            organised.
+            Where work<br />
+            <span className="text-indigo-400 font-semibold">clicks.</span>
           </h1>
 
           <p className="text-[17px] text-white/40 leading-relaxed max-w-md mb-10"
@@ -136,7 +139,18 @@ export default function LandingPage() {
         </div>
 
         {/* Mock board */}
-        <div ref={heroRef} className="mt-20 transition-transform duration-100 ease-out" style={{ willChange: 'transform' }}>
+        <div
+          style={{
+            perspective: '1400px',
+            animation: 'boardFloat 6s ease-in-out infinite'
+          }}
+          className="mt-20"
+        >
+          <div
+            ref={heroRef}
+            className="transition-transform duration-150 ease-out"
+            style={{ transformStyle: 'preserve-3d', willChange: 'transform' }}
+          >
           <div className="rounded-2xl border border-white/[0.08] overflow-hidden shadow-[0_60px_120px_rgba(0,0,0,0.8)]"
             style={{ background: 'linear-gradient(160deg, #161825 0%, #0f1118 100%)' }}>
 
@@ -191,6 +205,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
+         </div>
         </div>
       </section>
 
@@ -271,6 +286,11 @@ export default function LandingPage() {
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(16px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes boardFloat {
+          0%   { transform: translateY(0px); }
+          50%  { transform: translateY(-10px); }
+          100% { transform: translateY(0px); }
         }
       `}</style>
     </div>
