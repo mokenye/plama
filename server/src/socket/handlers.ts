@@ -10,6 +10,7 @@ import {
 import { executeWrite, executeTransaction } from '../db/connection';
 import { verifyToken } from '../utils/jwt';
 import { notifyCardAssignment, notifyCardComment, notifyCardMoved, registerUserSocket, unregisterUserSocket } from '../utils/notifications';
+import { Client } from 'pg';
 
 // ================================
 // Types
@@ -90,8 +91,12 @@ export const setupSocketHandlers = (io: Server) => {
 
     socketBoards.set(socket.id, new Set());
 
-    // Track user→socket mapping for targeted notification delivery
-    registerUserSocket(socket.userId!, socket.id);
+    // Register for targeted events (notifications, board-invited, board-removed)
+    if (socket.userId) {
+      registerUserSocket(socket.userId, socket.id);
+      // Join personal room — enables reliable targeted emits without userSockets map
+      socket.join(`user:${socket.userId}`);
+    }
 
     // --------------------------------
     // Board: Join / Leave
@@ -295,54 +300,47 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
-        // Read card + list metadata outside the transaction (reads are safe concurrent)
+        // Get card title, assignees, and list names for activity + notifications
         const cardResult = await executeWrite(
           'SELECT title, assignees FROM cards WHERE id = $1',
           [data.cardId]
         );
-        const cardTitle    = cardResult.rows[0]?.title     || 'Card';
+        const cardTitle = cardResult.rows[0]?.title || 'Card';
         const cardAssignees: number[] = cardResult.rows[0]?.assignees || [];
 
         const listsResult = await executeWrite(
           'SELECT id, title FROM lists WHERE id = ANY($1)',
           [[data.oldListId, data.newListId]]
         );
-        const listMap     = new Map(listsResult.rows.map((l: any) => [l.id, l.title]));
+        const listMap = new Map(listsResult.rows.map((l: any) => [l.id, l.title]));
         const oldListTitle = listMap.get(data.oldListId) || 'List';
         const newListTitle = listMap.get(data.newListId) || 'List';
 
-        // ── Transactional position update ──────────────────────────────────
-        // All three writes succeed or all three roll back together.
-        // This prevents position gaps/duplicates when two moves arrive
-        // simultaneously for cards in the same list.
+        // Update card position in DB
         await executeTransaction(async (client) => {
-          // 1. Move the card itself
           await client.query(
-            `UPDATE cards
-             SET list_id = $1, position = $2, updated_at = NOW()
-             WHERE id = $3`,
+            `UPDATE cards SET list_id = $1, position = $2, updated_at = NOW()
+            WHERE id = $3`,
             [data.newListId, data.newPosition, data.cardId]
           );
 
-          // 2. Close the gap in the old list
+          // Reorder positions in both lists
+          // Shift positions down in old list
           await client.query(
-            `UPDATE cards
-             SET position = position - 1
-             WHERE list_id = $1 AND position > $2 AND id != $3`,
+            `UPDATE cards SET position = position - 1
+            WHERE list_id = $1 AND position > $2 AND id != $3`,
             [data.oldListId, data.oldPosition, data.cardId]
           );
 
-          // 3. Make room in the new list
+          // Shift positions up in new list
           await client.query(
-            `UPDATE cards
-             SET position = position + 1
-             WHERE list_id = $1 AND position >= $2 AND id != $3`,
+            `UPDATE cards SET position = position + 1
+            WHERE list_id = $1 AND position >= $2 AND id != $3`,
             [data.newListId, data.newPosition, data.cardId]
           );
         });
-        // ───────────────────────────────────────────────────────────────────
-
-        // Log activity + notify (fire after commit — non-critical)
+        
+        // Log activity
         await logActivity({
           boardId: data.boardId,
           userId: socket.userId!,
@@ -351,9 +349,13 @@ export const setupSocketHandlers = (io: Server) => {
           entityType: 'card',
           entityId: data.cardId,
           entityName: cardTitle,
-          metadata: { fromList: oldListTitle, toList: newListTitle },
+          metadata: {
+            fromList: oldListTitle,
+            toList: newListTitle,
+          },
         });
 
+        // Notify assignees about the move
         if (cardAssignees.length > 0) {
           await notifyCardMoved(
             cardAssignees,
@@ -367,7 +369,7 @@ export const setupSocketHandlers = (io: Server) => {
           );
         }
 
-        // Broadcast to all other users
+        // Broadcast move to all other users
         socket.to(`board:${data.boardId}`).emit('card-moved', {
           ...data,
           movedBy: { id: socket.userId, name: socket.userName },
@@ -375,7 +377,7 @@ export const setupSocketHandlers = (io: Server) => {
 
       } catch (error) {
         logger.error({ error, data }, 'Failed to move card');
-        // Transaction rolled back — tell sender to undo their optimistic update
+        // Tell sender to rollback optimistic update
         socket.emit('card-move-failed', {
           cardId: data.cardId,
           oldListId: data.oldListId,
@@ -470,21 +472,6 @@ export const setupSocketHandlers = (io: Server) => {
       }
     });
 
-    // --------------------------------
-    // Cursor Tracking (optional feature)
-    // --------------------------------
-    if (process.env.ENABLE_CURSORS === 'true') {
-      socket.on('cursor-move', (data: { boardId: number; x: number; y: number }) => {
-        socket.to(`board:${data.boardId}`).emit('cursor-update', {
-          userId: socket.userId,
-          userName: socket.userName,
-          x: data.x,
-          y: data.y,
-        });
-      });
-    }
-
-    // --------------------------------
     // Card reorder within list
     // --------------------------------
     socket.on('cards-reordered', async (data: {
@@ -509,46 +496,66 @@ export const setupSocketHandlers = (io: Server) => {
         logger.error({ error, data }, 'Failed to reorder cards');
       }
     });
-
+    
     // --------------------------------
-    // List reorder
+    // List Move (reorder)
     // --------------------------------
     socket.on('list-moved', async (data: {
       listId: number;
+      boardId: number;
       newPosition: number;
       oldPosition: number;
-      boardId: number;
     }) => {
       try {
-        // Get all lists for this board ordered by position
-        const listsResult = await executeWrite(
-          'SELECT id FROM lists WHERE board_id = $1 ORDER BY position ASC',
-          [data.boardId]
-        );
-        const ids: number[] = listsResult.rows.map((r: any) => r.id);
+        const { listId, boardId, newPosition, oldPosition } = data;
 
-        // Apply the same arrayMove logic as the client
-        const oldIdx = ids.indexOf(data.listId);
-        if (oldIdx !== -1) {
-          ids.splice(oldIdx, 1);
-          ids.splice(data.newPosition, 0, data.listId);
-          // Persist new positions
-          for (let i = 0; i < ids.length; i++) {
-            await executeWrite(
-              'UPDATE lists SET position = $1 WHERE id = $2',
-              [i, ids[i]]
-            );
-          }
+        // Shift other lists to make room
+        if (newPosition > oldPosition) {
+          // Moving right — shift lists between old and new left by 1
+          await executeWrite(
+            `UPDATE lists SET position = position - 1
+             WHERE board_id = $1 AND position > $2 AND position <= $3 AND id != $4`,
+            [boardId, oldPosition, newPosition, listId]
+          );
+        } else {
+          // Moving left — shift lists between new and old right by 1
+          await executeWrite(
+            `UPDATE lists SET position = position + 1
+             WHERE board_id = $1 AND position >= $2 AND position < $3 AND id != $4`,
+            [boardId, newPosition, oldPosition, listId]
+          );
         }
 
-        socket.to(`board:${data.boardId}`).emit('list-moved', {
-          listId: data.listId,
-          newPosition: data.newPosition,
+        // Set the moved list to its new position
+        await executeWrite(
+          `UPDATE lists SET position = $1 WHERE id = $2`,
+          [newPosition, listId]
+        );
+
+        // Broadcast to all other users on this board
+        socket.to(`board:${boardId}`).emit('list-moved', {
+          listId,
+          newPosition,
         });
+
       } catch (error) {
         logger.error({ error, data }, 'Failed to move list');
       }
     });
+
+    // --------------------------------
+    // Cursor Tracking (optional feature)
+    // --------------------------------
+    if (process.env.ENABLE_CURSORS === 'true') {
+      socket.on('cursor-move', (data: { boardId: number; x: number; y: number }) => {
+        socket.to(`board:${data.boardId}`).emit('cursor-update', {
+          userId: socket.userId,
+          userName: socket.userName,
+          x: data.x,
+          y: data.y,
+        });
+      });
+    }
 
     // --------------------------------
     // Disconnect Cleanup
@@ -556,7 +563,7 @@ export const setupSocketHandlers = (io: Server) => {
     socket.on('disconnect', async () => {
       logger.info({ socketId: socket.id, userId: socket.userId }, 'User disconnected');
 
-      unregisterUserSocket(socket.userId!, socket.id);
+      if (socket.userId) unregisterUserSocket(socket.userId, socket.id);
 
       const boards = socketBoards.get(socket.id);
       if (boards) {
