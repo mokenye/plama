@@ -9,6 +9,8 @@ interface ListColumnProps {
   cards: Card[]
   boardMembers: { id: number; name: string; email: string }[]
   boardLabels: string[]
+  boardId: number
+  currentUserId: number
   dragHandleProps?: React.HTMLAttributes<HTMLElement>
   isFirst?: boolean
   onCreateCard: (listId: number, title: string, description?: string) => void
@@ -23,6 +25,8 @@ export default function ListColumn({
   cards,
   boardMembers,
   boardLabels,
+  boardId,
+  currentUserId,
   dragHandleProps,
   isFirst,
   onCreateCard,
@@ -116,6 +120,8 @@ export default function ListColumn({
               card={card}
               boardMembers={boardMembers}
               boardLabels={boardLabels}
+              boardId={boardId}
+              currentUserId={currentUserId}
               onUpdate={onUpdateCard}
               onDelete={() => onDeleteCard(card.id, list.id)}
               isDone={list.title.toLowerCase() === 'done'}
