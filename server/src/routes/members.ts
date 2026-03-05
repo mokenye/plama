@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { notifyBoardInvite, userSockets, getIo } from '../utils/notifications';
+import { logger } from '../utils/logger';
 
 const router = Router();
 router.use(authenticate);
@@ -64,7 +65,7 @@ router.post('/:boardId/members', async (req: AuthRequest, res: Response) => {
       req.userId!,     // the user doing the inviting
       req.userName!,   // inviter's name (from auth middleware)
       boardId
-    ).catch(err => console.error('[Members] Notification error:', err));
+    ).catch(err => logger.error({ err }, '[Members] Notification error'));
 
     res.status(201).json({
       member: {
@@ -76,7 +77,7 @@ router.post('/:boardId/members', async (req: AuthRequest, res: Response) => {
       message: `${invitedUser.name} added to board`,
     });
   } catch (error) {
-    console.error('[Members API] Error adding member:', error);
+    logger.error({ error }, '[Members API] Error adding member');
     res.status(500).json({ error: 'Failed to add member' });
   }
 });
@@ -114,21 +115,15 @@ router.delete('/:boardId/members/:userId', async (req: AuthRequest, res: Respons
       [boardId, userIdToRemove]
     );
 
-    // Push board-removed directly to the removed user's socket(s)
-    // so their dashboard updates instantly without a refresh
+    // Push board-removed to the removed user's personal room
     const io = getIo()
     if (io) {
-      const sockets = userSockets.get(userIdToRemove)
-      if (sockets && sockets.size > 0) {
-        for (const socketId of sockets) {
-          io.to(socketId).emit('board-removed', { boardId })
-        }
-      }
+      io.to(`user:${userIdToRemove}`).emit('board-removed', { boardId })
     }
 
     res.json({ message: 'Member removed' });
   } catch (error) {
-    console.error('[Members API] Error removing member:', error);
+    logger.error({ error }, '[Members API] Error removing member');
     res.status(500).json({ error: 'Failed to remove member' });
   }
 });
