@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBoardsStore } from '../../store'
+import { apiBase } from '../../services/api'
 
 interface Member {
   id: number
@@ -96,7 +97,7 @@ export default function BoardSettings({
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/boards/${boardId}`, {
+      const res = await fetch(`${apiBase}/boards/${boardId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ title: title.trim(), background_color: color }),
@@ -116,7 +117,7 @@ export default function BoardSettings({
     setRemovingId(userId)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/boards/${boardId}/members/${userId}`, {
+      const res = await fetch(`${apiBase}/boards/${boardId}/members/${userId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -136,7 +137,7 @@ export default function BoardSettings({
   const actuallyDelete = async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/boards/${boardId}`, {
+      const res = await fetch(`${apiBase}/boards/${boardId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -189,19 +190,30 @@ export default function BoardSettings({
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Board Name</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Board Name
+              {!isOwner && <span className="ml-2 text-xs text-gray-400">(owner only)</span>}
+            </label>
             <input
               type="text"
               value={title}
-              onChange={e => setTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={e => isOwner && setTitle(e.target.value)}
+              readOnly={!isOwner}
+              className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                isOwner
+                  ? 'border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+                  : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed select-none'
+              }`}
             />
           </div>
 
           {/* Color */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Background Color</label>
-            <div className="grid grid-cols-5 gap-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Background Color
+              {!isOwner && <span className="ml-2 text-xs text-gray-400">(owner only)</span>}
+            </label>
+            <div className={`grid grid-cols-5 gap-2 ${!isOwner ? 'opacity-40 pointer-events-none' : ''}`}>
               {PRESET_COLORS.map(preset => (
                 <button key={preset.value} onClick={() => setColor(preset.value)}
                   className={`h-10 rounded-lg transition-all ${color === preset.value ? 'ring-4 ring-indigo-500 ring-offset-2 scale-105' : 'hover:scale-105 hover:brightness-110'}`}
