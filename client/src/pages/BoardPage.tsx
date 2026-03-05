@@ -14,6 +14,7 @@ import { useBoardLabels } from '../hooks/useBoardLabels'
 import NotificationBell from '../components/Notifications/NotificationBell'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import ShortcutsHelp from '../components/Shortcuts/ShortcutsHelp'
+import { getSocket } from '../services/socket'
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
@@ -76,6 +77,20 @@ export default function BoardPage() {
       setBoardTitle(board.title)
       setBoardColor(board.backgroundColor || '#0052CC')
     }
+  }, [board])
+
+  // Real-time: update title/color when owner changes them
+  // Depends on board so it re-runs after socket is initialised
+  useEffect(() => {
+    if (!board) return
+    let s: ReturnType<typeof getSocket> | null = null
+    try { s = getSocket() } catch { return }
+    const onBoardUpdated = ({ title, backgroundColor }: { boardId: number; title: string; backgroundColor: string }) => {
+      setBoardTitle(title)
+      setBoardColor(backgroundColor)
+    }
+    s.on('board-updated', onBoardUpdated)
+    return () => { s?.off('board-updated', onBoardUpdated) }
   }, [board])
 
   useKeyboardShortcuts([
@@ -330,6 +345,8 @@ export default function BoardPage() {
       {/* Board content — fills remaining height, BoardView handles its own scroll */}
       <div className="flex-1 overflow-hidden min-h-0">
         <BoardView
+          boardId={board.id}
+          currentUserId={user?.id ?? 0}
           lists={lists}
           cards={filteredCards}
           boardMembers={members}
