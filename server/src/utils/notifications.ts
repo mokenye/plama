@@ -75,12 +75,9 @@ export async function createNotification({
         : new Date(row.created_at + 'Z').toISOString(),
     };
 
-    // Push to recipient's socket(s) immediately — no polling needed
-    const sockets = userSockets.get(userId);
-    if (_io && sockets && sockets.size > 0) {
-      for (const socketId of sockets) {
-        _io.to(socketId).emit('notification', notification);
-      }
+    // Push to recipient's personal room immediately — no polling needed
+    if (_io) {
+      _io.to(`user:${userId}`).emit('notification', notification);
     }
   } catch (error) {
     console.error('[Notifications] Failed to create notification:', error);
@@ -118,26 +115,20 @@ export async function notifyBoardInvite(
          b.id,
          b.title,
          b.description,
-         b.background_color  AS "backgroundColor",
-         b.created_by        AS "createdBy",
-         b.created_at        AS "createdAt",
-         u.name              AS "ownerName",
+         b.background_color   AS "backgroundColor",
+         b.owner_id           AS "ownerId",
+         b.created_at         AS "createdAt",
+         u.name               AS "ownerName",
          (SELECT COUNT(*)::int FROM board_members bm WHERE bm.board_id = b.id) AS "memberCount"
        FROM boards b
-       JOIN users u ON b.created_by = u.id
+       JOIN users u ON b.owner_id = u.id
        WHERE b.id = $1`,
       [boardId]
     );
 
-    const sockets = userSockets.get(inviteeId);
-    console.log(`[Notifications] board-invited: inviteeId=${inviteeId}, sockets=${sockets?.size ?? 0}`);
-
-    if (boardResult.rows[0] && sockets && sockets.size > 0) {
-      const board = boardResult.rows[0]; // already camelCase via column aliases
-      for (const socketId of sockets) {
-        console.log(`[Notifications] emitting board-invited to socket ${socketId}`, board.title);
-        _io?.to(socketId).emit('board-invited', { board });
-      }
+    if (boardResult.rows[0] && _io) {
+      const board = boardResult.rows[0];
+      _io.to(`user:${inviteeId}`).emit('board-invited', { board });
     }
   } catch (err) {
     console.error('[Notifications] Failed to push board-invited:', err);
