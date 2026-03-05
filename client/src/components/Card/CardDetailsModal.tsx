@@ -43,6 +43,18 @@ export default function CardDetailsModal({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
 
+  // Sync local state when card is updated externally (e.g. another user saves)
+  // Only update fields the local user hasn't modified to avoid overwriting their work
+  useEffect(() => {
+    if (!hasChanges) {
+      setTitle(card.title)
+      setDescription(card.description || '')
+      setDueDate(card.dueDate ? card.dueDate.split('T')[0] : '')
+      setSelectedLabels(card.labels || [])
+      setSelectedAssignees(card.assignees || [])
+    }
+  }, [card])
+
   // Comments state
   const [comments, setComments] = useState<CardComment[]>([])
   const [newComment, setNewComment] = useState('')
