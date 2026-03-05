@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { apiBase } from '../../services/api'
 
 interface BoardMember {
   id: number
@@ -35,7 +36,7 @@ export default function InviteMember({ boardId, onMemberAdded }: InviteMemberPro
     setMessage('')
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/boards/${boardId}/members`, {
+      const response = await fetch(`${apiBase}/boards/${boardId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
