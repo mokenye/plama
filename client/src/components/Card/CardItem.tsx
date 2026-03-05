@@ -9,9 +9,11 @@ interface CardItemProps {
   card: OptimisticCard
   boardMembers: { id: number; name: string; email: string }[]
   boardLabels: string[]
+  boardId: number
+  currentUserId: number
   onUpdate: (cardId: number, updates: { title?: string; description?: string }) => void
   onDelete: () => void
-  isDone?: boolean // pass true when card is in a "Done" list
+  isDone?: boolean
 }
 
 // Subtle tinted label pills instead of solid colors
@@ -26,7 +28,7 @@ const LABEL_COLORS: Record<string, string> = {
   'Testing':      'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-500',
 }
 
-export default function CardItem({ card, boardMembers, boardLabels, onUpdate, onDelete, isDone }: CardItemProps) {
+export default function CardItem({ card, boardMembers, boardLabels, boardId, currentUserId, onUpdate, onDelete, isDone }: CardItemProps) {
   const [showModal, setShowModal] = useState(false)
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -145,6 +147,8 @@ export default function CardItem({ card, boardMembers, boardLabels, onUpdate, on
           card={card}
           boardMembers={boardMembers}
           boardLabels={boardLabels}
+          boardId={boardId}
+          currentUserId={currentUserId}
           onClose={() => setShowModal(false)}
           onUpdate={onUpdate}
           onDelete={onDelete}
