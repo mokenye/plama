@@ -62,13 +62,10 @@ export const useBoard = (boardId: number) => {
       setLoading(true);
 
       try {
-        console.log('[useBoard] Loading board:', boardId);
         const data = await boardsApi.getById(boardId);
-        console.log('[useBoard] Board data loaded:', data);
         if (!mounted) return;
         setBoardData(data);
 
-        console.log('[useBoard] Initializing socket...');
         initSocket(token);
         bindBoardEvents(boardId);
         joinBoard(boardId);
@@ -197,9 +194,7 @@ export const useBoard = (boardId: number) => {
     async (title: string) => {
       if (!board) return;
       try {
-        console.log('[useBoard] Creating list:', title, 'for board:', board.id);
         const { list } = await listsApi.create(board.id, { title });
-        console.log('[useBoard] List created:', list);
         useBoardStore.getState().addList(list);
       } catch (err: any) {
         console.error('[useBoard] Create list error:', err);
@@ -213,10 +208,8 @@ export const useBoard = (boardId: number) => {
   const reorderCards = useCallback(
     (listId: number, cardIds: number[]) => {
       if (!board) return;
-      // Optimistic update
       useBoardStore.getState().reorderCards(listId, cardIds);
-      // Persist + broadcast
-      cardsApi.reorder(board.id, listId, cardIds).catch(console.error);
+      cardsApi.reorder(board.id, listId, cardIds).catch((err) => console.error('[useBoard] Reorder error:', err));
       emitCardsReordered({ listId, cardIds, boardId: board.id });
     },
     [board]
@@ -226,7 +219,6 @@ export const useBoard = (boardId: number) => {
     (listId: number, newPosition: number, oldPosition: number) => {
       if (!board) return;
       useBoardStore.getState().moveList(listId, newPosition);
-      listsApi.reorder(board.id, listId, newPosition).catch(console.error);
       emitListMoved({ listId, newPosition, oldPosition, boardId: board.id });
     },
     [board]
