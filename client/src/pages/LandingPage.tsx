@@ -278,7 +278,13 @@ export default function LandingPage() {
             <div className="w-5 h-5 rounded-md bg-indigo-500 flex items-center justify-center text-xs font-black">P</div>
             <span className="text-sm font-semibold text-white/35">plama</span>
           </div>
-          <p className="text-xs text-white/15">© {new Date().getFullYear()} Plama. All rights reserved.</p>
+          {/* <p className="text-xs text-white/15">© {new Date().getFullYear()} Plama. All rights reserved.</p> */}
+          <p className="text-xs text-white/15">
+            © {new Date().getFullYear()} Plama. Made with <span className="opacity-50">♥</span> by 
+            <a href="https://github.com/mokenye" className="hover:text-white/40 transition-colors ml-1">
+              Mokenye
+            </a>.
+          </p>
         </div>
       </footer>
 
