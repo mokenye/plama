@@ -11,7 +11,9 @@
     "test:smoke": "jest --config jest.config.cjs --runInBand",
     "test:load": "artillery run ../artillery-test.yml",
     "db:migrate": "ts-node src/db/migrate.ts",
-    "db:seed": "ts-node scripts/seed-demo.ts"
+    "db:seed": "ts-node scripts/seed-demo.ts",
+    "test:load:local": "artillery run ../artillery-local-bypass.yml"
+
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
