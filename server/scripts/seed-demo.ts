@@ -19,7 +19,7 @@ const seed = async () => {
       user = existing.rows[0];
       console.log('Found existing demo user:', user.email);
     } else {
-      const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+      const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10); // use 4 or 10 rounds for faster seeding in development, 12 in production
       const res = await executeWrite(
         `INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email`,
         [DEFAULT_NAME, DEFAULT_EMAIL, passwordHash]
