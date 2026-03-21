@@ -1,0 +1,43 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 20
+      name: "Warm up (DB focus)"
+    - duration: 60
+      arrivalRate: 100
+      name: "Sustained (Heavy DB load)"
+    - duration: 60
+      arrivalRate: 200 
+      name: "Spike (Breaking Point test)"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      # PASTE YOUR TOKEN FROM THE SEED SCRIPT HERE
+      Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoiZGVtb0BleGFtcGxlLmNvbSIsIm5hbWUiOiJEZW1vIFVzZXIiLCJpYXQiOjE3NzQwNzcxMTQsImV4cCI6MTc3NDY4MTkxNH0.HpPXGcE5jBu8QStvfh6_vONodwOIO0HZo_rdAuvqR18"
+
+scenarios:
+  - name: "Direct Board Access (No Login)"
+    flow:
+      - get:
+          url: "/api/boards"
+      
+      - think: 1 # Brief pause to mimic a real user
+
+# config:
+#   target: "http://localhost:3000"
+#   phases:
+#     - duration: 60
+#       arrivalRate: 250 # 250 new users per second
+#       name: "The True Breaking Point"
+#   defaults:
+#     headers:
+#       Content-Type: "application/json"
+#       Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoiZGVtb0BleGFtcGxlLmNvbSIsIm5hbWUiOiJEZW1vIFVzZXIiLCJpYXQiOjE3NzQwNzcxMTQsImV4cCI6MTc3NDY4MTkxNH0.HpPXGcE5jBu8QStvfh6_vONodwOIO0HZo_rdAuvqR18"
+
+# scenarios:
+#   - name: "Infinite DB Stress"
+#     flow:
+#       - get:
+#           url: "/api/boards"
+#       # immediate, repeated hits.
