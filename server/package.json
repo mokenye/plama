@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "jest",
+    "test:smoke": "jest --config jest.config.cjs --runInBand",
     "test:load": "artillery run ../artillery-test.yml",
     "db:migrate": "ts-node src/db/migrate.ts",
     "db:seed": "ts-node src/db/seed.ts"
@@ -39,6 +40,8 @@
     "nodemon": "^3.1.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
+    "axios": "^1.6.8",
+    "socket.io-client": "^4.7.4",
     "typescript": "^5.4.3"
   }
 }
