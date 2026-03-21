@@ -164,4 +164,4 @@ API Gateway
 3. **Cost** — each phase multiplies infrastructure cost
 4. **Code is structured for it** — can enable with environment flags when metrics demand it
 
-This is how I'd approach it in production: **scale based on data, not assumptions.**
+My appproach in production: **scale based on data, not assumptions.**
