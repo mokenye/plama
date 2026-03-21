@@ -43,7 +43,7 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, 10); // 10 salt rounds is a good balance for security and performance. 12 is more secure but can be slower, especially on free-tier hosting. Adjust as needed based on your environment and load testing results.
 
     // Create user
     const result = await executeWrite(
