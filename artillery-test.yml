@@ -22,11 +22,13 @@ scenarios:
       - post:
           url: "/api/auth/login"
           json:
-            email: "test@example.com"
-            password: "testpassword123"
+            email: "demo@example.com"
+            password: "password123"
           capture:
             - json: "$.token"
               as: "token"
+
+      - think: 1 # Brief pause to mimic a real user
 
       # Get boards
       - get:
@@ -34,12 +36,4 @@ scenarios:
           headers:
             Authorization: "Bearer {{ token }}"
 
-      # Health check
-      - get:
-          url: "/health"
-
-      - think: 2
-
-      # Get metrics
-      - get:
-          url: "/metrics"
+      - think: 2 # Simulate user browsing the boards
