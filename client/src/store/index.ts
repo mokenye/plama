@@ -178,11 +178,38 @@ export const useBoardStore = create<BoardState>((set) => ({
     })),
 
   moveCard: (cardId, newListId, newPosition) =>
-    set((state) => ({
-      cards: state.cards.map((c) =>
-        c.id === cardId ? { ...c, listId: newListId, position: newPosition } : c
-      ),
-    })),
+    set((state) => {
+      // Remove card from its current list, insert at newPosition in target list,
+      // then rewrite positions for both affected lists so there are no duplicates.
+      const moving = state.cards.find(c => c.id === cardId)
+      if (!moving) return {}
+
+      const oldListId = moving.listId
+
+      // Cards staying in the old list, re-indexed from 0
+      const oldListCards = state.cards
+        .filter(c => c.listId === oldListId && c.id !== cardId)
+        .sort((a, b) => a.position - b.position)
+        .map((c, i) => ({ ...c, position: i }))
+
+      // Cards already in the target list (card may be moving within same list)
+      const targetListCards = state.cards
+        .filter(c => c.listId === newListId && c.id !== cardId)
+        .sort((a, b) => a.position - b.position)
+
+      // Splice the moved card in at newPosition
+      targetListCards.splice(newPosition, 0, { ...moving, listId: newListId })
+      const newTargetCards = targetListCards.map((c, i) => ({ ...c, position: i }))
+
+      // Merge: unchanged cards + reindexed old list + reindexed target list
+      const untouched = state.cards.filter(
+        c => c.listId !== oldListId && c.listId !== newListId
+      )
+
+      return {
+        cards: [...untouched, ...oldListCards, ...newTargetCards],
+      }
+    }),
 
   removeCard: (cardId) =>
     set((state) => ({ cards: state.cards.filter((c) => c.id !== cardId) })),
