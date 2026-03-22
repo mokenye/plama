@@ -288,6 +288,15 @@ export default function DashboardPage() {
         })()}
       </main>
 
+      {/* Shortcuts hint — bottom-right corner */}
+      <button
+        onClick={() => setShowShortcutsHelp(true)}
+        className="fixed bottom-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 shadow-sm transition-colors z-50"
+        title="Keyboard shortcuts (?)"
+      >
+        <span className="font-mono text-sm leading-none">?</span>
+      </button>
+
       <ShortcutsHelp isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
     </div>
   )

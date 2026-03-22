@@ -385,6 +385,15 @@ export default function BoardPage() {
       )}
 
       <ActivityLog boardId={board.id} isOpen={showActivityLog} onClose={() => setShowActivityLog(false)} />
+      {/* Shortcuts hint — bottom-right corner */}
+      <button
+        onClick={() => setShowShortcutsHelp(true)}
+        className="fixed bottom-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 backdrop-blur text-white shadow-sm transition-colors z-50"
+        title="Keyboard shortcuts (?)"
+      >
+        <span className="font-mono text-sm leading-none">?</span>
+      </button>
+
       <ShortcutsHelp isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
     </div>
   )
