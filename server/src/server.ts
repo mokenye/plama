@@ -79,6 +79,9 @@ const loginLimiter = rateLimit({
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/', limiter);
 
+// Warmup
+app.get('/ping', (req, res) => res.sendStatus(200));
+
 // ================================
 // Routes
 // ================================

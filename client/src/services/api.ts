@@ -53,6 +53,8 @@ export const authApi = {
     const res = await api.get<{ user: AuthResponse['user'] }>('/auth/me');
     return res.data;
   },
+
+  ping: () => api.get('/ping').catch(() => {})
 };
 
 // ================================
