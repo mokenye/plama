@@ -43,6 +43,7 @@ export default function CardItem({ card, boardMembers, boardLabels, boardId, cur
     <>
       <div
         ref={setNodeRef}
+        data-id={`card-${card.id}`}
         style={style}
         onClick={() => { if (!isDragging) setShowModal(true) }}
         className={`group relative bg-white dark:bg-gray-800 rounded-lg p-3 border transition-all outline-none focus:outline-none touch-none ${
