@@ -85,6 +85,40 @@ router.patch('/:boardId/lists/:listId', async (req: AuthRequest, res: Response) 
 });
 
 // --------------------------------
+// POST /api/boards/:boardId/lists/:listId/reorder
+// --------------------------------
+router.post('/:boardId/lists/:listId/reorder', async (req: AuthRequest, res: Response) => {
+  try {
+    const { boardId, listId } = req.params;
+    const { cardIds } = req.body;
+
+    if (!Array.isArray(cardIds) || cardIds.some((id) => typeof id !== 'number')) {
+      return res.status(400).json({ error: 'cardIds must be an array of numbers' });
+    }
+
+    const access = await executeRead(
+      `SELECT role FROM board_members WHERE board_id = $1 AND user_id = $2`,
+      [boardId, req.userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Update each card's position based on its index in cardIds
+    for (let i = 0; i < cardIds.length; i++) {
+      await executeWrite(
+        `UPDATE cards SET position = $1 WHERE id = $2 AND list_id = $3`,
+        [i + 1, cardIds[i], listId]
+      );
+    }
+
+    res.json({ message: 'Cards reordered' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reorder cards' });
+  }
+});
+
+// --------------------------------
 // DELETE /api/boards/:boardId/lists/:listId
 // --------------------------------
 router.delete('/:boardId/lists/:listId', async (req: AuthRequest, res: Response) => {
