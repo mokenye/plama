@@ -13,6 +13,7 @@ interface ListColumnProps {
   currentUserId: number
   dragHandleProps?: React.HTMLAttributes<HTMLElement>
   isFirst?: boolean
+  dropIndicatorIndex: number | null
   onCreateCard: (listId: number, title: string, description?: string) => void
   onUpdateCard: (cardId: number, updates: { title?: string; description?: string }) => void
   onMoveCard: (cardId: number, newListId: number, newPosition: number, oldListId: number, oldPosition: number) => void
@@ -29,6 +30,7 @@ export default function ListColumn({
   currentUserId,
   dragHandleProps,
   isFirst,
+  dropIndicatorIndex,
   onCreateCard,
   onUpdateCard,
   onDeleteCard,
@@ -113,20 +115,31 @@ export default function ListColumn({
         items={cards.map(c => `card-${c.id}`)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex-1 overflow-y-auto space-y-2 mb-2">
-          {cards.map((card) => (
-            <CardItem
-              key={card.id}
-              card={card}
-              boardMembers={boardMembers}
-              boardLabels={boardLabels}
-              boardId={boardId}
-              currentUserId={currentUserId}
-              onUpdate={onUpdateCard}
-              onDelete={() => onDeleteCard(card.id, list.id)}
-              isDone={list.title.toLowerCase() === 'done'}
-            />
+        <div className="flex-1 overflow-y-auto mb-2">
+          {cards.map((card, idx) => (
+            <div key={card.id}>
+              {/* Drop indicator above this card */}
+              {dropIndicatorIndex === idx && (
+                <div className="mx-1 my-1 h-0.5 rounded-full bg-indigo-400 dark:bg-indigo-400 opacity-90 shadow-sm shadow-indigo-400/50 animate-pulse" />
+              )}
+              <div className="mb-2">
+                <CardItem
+                  card={card}
+                  boardMembers={boardMembers}
+                  boardLabels={boardLabels}
+                  boardId={boardId}
+                  currentUserId={currentUserId}
+                  onUpdate={onUpdateCard}
+                  onDelete={() => onDeleteCard(card.id, list.id)}
+                  isDone={list.title.toLowerCase() === 'done'}
+                />
+              </div>
+            </div>
           ))}
+          {/* Drop indicator at the end of the list */}
+          {dropIndicatorIndex === cards.length && (
+            <div className="mx-1 mt-1 h-0.5 rounded-full bg-indigo-400 dark:bg-indigo-400 opacity-90 shadow-sm shadow-indigo-400/50 animate-pulse" />
+          )}
         </div>
       </SortableContext>
 
