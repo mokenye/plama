@@ -69,6 +69,14 @@ const limiter = rateLimit({
   standardHeaders: true, // Returns limit info in the `RateLimit-*` headers
   legacyHeaders: false,  // Disable the `X-RateLimit-*` headers
 });
+
+const loginLimiter = rateLimit({
+  windowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+  max: parseInt(process.env.LOGIN_RATE_LIMIT_MAX_REQUESTS || '5'),     // Only 5 login attempts per 15 mins
+  message: "Too many login attempts, please try again later"
+});
+
+app.use('/api/auth/login', loginLimiter);
 app.use('/api/', limiter);
 
 // ================================
