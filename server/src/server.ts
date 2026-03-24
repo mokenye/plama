@@ -80,7 +80,7 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/', limiter);
 
 // Warmup
-app.get('/ping', (req, res) => res.sendStatus(200));
+app.get('/api/ping', (req, res) => res.sendStatus(200));
 
 // ================================
 // Routes
