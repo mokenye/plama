@@ -88,6 +88,15 @@ router.post('/login', async (req: Request, res: Response) => {
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
+    
+    // Rehash from 12 to 10 rounds for performance
+    if (user.password_hash.startsWith('$2b$12$')) {
+      const fasterHash = await bcrypt.hash(password, 10);
+      await executeWrite(
+        'UPDATE users SET password_hash = $1 WHERE id = $2',
+        [fasterHash, user.id]
+      );
+    }
 
     const token = signToken({ userId: user.id, email: user.email, name: user.name });
 
