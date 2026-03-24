@@ -7,6 +7,7 @@ import NotificationBell from '../components/Notifications/NotificationBell'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import ShortcutsHelp from '../components/Shortcuts/ShortcutsHelp'
 import { initSocket, getSocket } from '../services/socket'
+import { disconnectSocket } from '../services/socket'
 
 const PlamaLogo = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className="w-8 h-8 flex-shrink-0">
@@ -141,7 +142,7 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLogout = () => { clearAuth(); navigate('/login') }
+  const handleLogout = () => { disconnectSocket(); clearAuth(); navigate('/login') }
 
   if (isLoading) {
     return (

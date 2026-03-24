@@ -14,12 +14,14 @@ import { useBoardLabels } from '../hooks/useBoardLabels'
 import NotificationBell from '../components/Notifications/NotificationBell'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import ShortcutsHelp from '../components/Shortcuts/ShortcutsHelp'
-import { getSocket } from '../services/socket'
+import { initSocket, getSocket } from '../services/socket'
+import { disconnectSocket } from '../services/socket'
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
+  const token = useAuthStore((state) => state.token)
   const clearAuth = useAuthStore((state) => state.clearAuth)
 
   const [darkMode, setDarkMode] = useState(() => {
@@ -67,6 +69,10 @@ export default function BoardPage() {
       filteredCards.filter(c => c.listId === listId).sort((a, b) => a.position - b.position),
     [filteredCards]
   )
+
+  useEffect(() => {
+    if (token) initSocket(token)
+  }, [token])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
@@ -129,7 +135,7 @@ export default function BoardPage() {
     },
   ], !isLoading)
 
-  const handleLogout = () => { clearAuth(); navigate('/login') }
+  const handleLogout = () => { disconnectSocket(); clearAuth(); navigate('/login') }
 
   if (isLoading) {
     return (
