@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { formatActivity } from '../../utils/formatActivity'
+import { apiBase } from '../../services/api'
 
 interface Activity {
   id: number
@@ -30,7 +31,7 @@ export default function ActivityLog({ boardId, isOpen, onClose }: ActivityLogPro
     const loadActivities = async () => {
       try {
         const token = localStorage.getItem('token')
-        const response = await fetch(`/api/boards/${boardId}/activity?limit=50`, {
+        const response = await fetch(`${apiBase}/boards/${boardId}/activity?limit=50`, {
           headers: { Authorization: `Bearer ${token}` },
         })
 
