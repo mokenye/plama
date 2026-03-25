@@ -72,8 +72,8 @@ const limiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.LOGIN_RATE_LIMIT_MAX_REQUESTS || '5'),     // Only 5 login attempts per 15 mins
-  message: "Too many login attempts, please try again later"
+  max: parseInt(process.env.LOGIN_RATE_LIMIT_MAX_REQUESTS || '10'),     // Only 10 login attempts per 15 mins
+  message: { error: 'Too many login attempts, please try again after 15 minutes' },
 });
 
 app.use('/api/auth/login', loginLimiter);
