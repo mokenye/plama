@@ -1,10 +1,10 @@
 # <img src="client/public/plama.svg" width="32" height="32" style="vertical-align:middle" alt="Plama logo" /> Plama
 
-> Real-time collaborative project board. Multiple users, one board, zero friction.
+> Real-time collaborative Kanban board. Multiple users, one board, zero friction.
 
-![Demo placeholder — add GIF of two browser windows showing real-time sync]
+![Demo](./client/public/plama.gif)
 
-**Live demo:** [plama.vercel.app](https://plama.vercel.app) *(deploy and update link)*
+**Live demo:** [plama.vercel.app](https://plama.vercel.app)
 
 ---
 
@@ -264,15 +264,22 @@ cd client && vercel --prod
 
 ## Performance
 
-Load tested with Artillery — up to 50 concurrent users, 10-minute sustained run:
+Benchmarked using Artillery to measure core logic efficiency (Local) and infrastructure behavior (Live). It is optimized for high-concurrency real-time collaboration.
 
-| Metric | Result |
-|--------|--------|
-| Average latency | ~45ms |
-| P95 latency | ~120ms |
-| P99 latency | ~180ms |
-| Error rate | <0.01% |
-| Requests/second | ~500 |
+| Metric | Local (Docker Baseline) | Live (Northflank/Neon Free) |
+| :--- | :--- | :--- |
+| Avg Latency | ~2.8ms | ~45ms - 85ms |
+| P95 Latency | ~4.0ms | ~180ms |
+| P99 Latency | ~6.0ms | ~350ms |
+| Throughput | ~270 Requests/sec | ~100 Requests/sec |
+| Error Rate | 0.0% | < 0.1% |
+
+*\* Live latency includes TCP/SSL handshakes (~30ms) and varies by user region. Initial requests may experience "Cold Start" delays (~500ms) due to Neon's serverless compute auto-suspend.*
+
+### Infrastructure Strategy & Constraints
+*   **Connection Pooling:** A fixed pool size of `max: 20` utilizes Neon's PgBouncer (Pooler) to support high concurrency while staying within free-tier connection limits (112 max).
+*   **Security Throttling:** Strict rate limiting is applied to authentication routes (10 attempts/15 mins) to protect 0.2 vCPU resources from CPU-intensive Bcrypt hashing.
+*   **Memory Management:** Optimized for 512MB RAM environments via `NODE_OPTIONS` to prevent OOM (Out of Memory) crashes during high-concurrency traffic spikes.
 
 ```bash
 npm run test:load
@@ -318,4 +325,4 @@ plama/
 
 ## License
 
-MIT
+MIT - see the [LICENSE](LICENSE) file for details.
