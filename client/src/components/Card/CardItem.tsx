@@ -16,16 +16,23 @@ interface CardItemProps {
   isDone?: boolean
 }
 
-// Subtle tinted label pills instead of solid colors
-const LABEL_COLORS: Record<string, string> = {
-  'Bug':          'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-  'Feature':      'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-  'Urgent':       'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-  'Low Priority': 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
-  'Design':       'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
-  'Backend':      'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
-  'Frontend':     'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
-  'Testing':      'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-500',
+// Same color palette as CardDetailsModal — index-based so custom labels get consistent colors
+const LABEL_COLORS = [
+  'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+  'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+  'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+  'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+  'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+  'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
+  'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-500',
+  'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
+  'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400',
+]
+
+function getLabelColor(label: string, allLabels: string[]) {
+  const idx = allLabels.indexOf(label)
+  return LABEL_COLORS[(idx >= 0 ? idx : label.length) % LABEL_COLORS.length]
 }
 
 export default function CardItem({ card, boardMembers, boardLabels, boardId, currentUserId, onUpdate, onDelete, isDone }: CardItemProps) {
@@ -66,7 +73,7 @@ export default function CardItem({ card, boardMembers, boardLabels, boardId, cur
             {card.labels.map((label) => (
               <span
                 key={label}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${LABEL_COLORS[label] ?? 'bg-gray-100 text-gray-500'}`}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getLabelColor(label, boardLabels)}`}
               >
                 {label}
               </span>
