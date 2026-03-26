@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { OptimisticCard, Comment as CardComment } from '../../types'
 import { getSocket } from '../../services/socket'
 import { apiBase } from '../../services/api'
@@ -14,16 +14,23 @@ interface CardDetailsModalProps {
   onDelete: () => void
 }
 
-const PRESET_LABELS = [
-  { name: 'Bug', color: 'bg-red-500' },
-  { name: 'Feature', color: 'bg-blue-500' },
-  { name: 'Urgent', color: 'bg-orange-500' },
-  { name: 'Low Priority', color: 'bg-gray-500' },
-  { name: 'Design', color: 'bg-purple-500' },
-  { name: 'Backend', color: 'bg-green-500' },
-  { name: 'Frontend', color: 'bg-cyan-500' },
-  { name: 'Testing', color: 'bg-yellow-500' },
+const LABEL_COLORS = [
+  'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+  'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+  'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+  'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+  'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+  'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
+  'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-500',
+  'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
+  'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400',
 ]
+
+function getLabelColor(label: string, allLabels: string[]) {
+  const idx = allLabels.indexOf(label)
+  return LABEL_COLORS[(idx >= 0 ? idx : label.length) % LABEL_COLORS.length]
+}
 
 export default function CardDetailsModal({
   card,
@@ -201,6 +208,15 @@ export default function CardDetailsModal({
     }
   }
 
+  // New label creation
+  const [newLabelInput, setNewLabelInput] = useState('')
+  const [showNewLabelInput, setShowNewLabelInput] = useState(false)
+  const newLabelRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (showNewLabelInput) newLabelRef.current?.focus()
+  }, [showNewLabelInput])
+
   const toggleLabel = (label: string) => {
     if (selectedLabels.includes(label)) {
       setSelectedLabels(selectedLabels.filter(l => l !== label))
@@ -208,6 +224,24 @@ export default function CardDetailsModal({
       setSelectedLabels([...selectedLabels, label])
     }
   }
+
+  const handleCreateLabel = () => {
+    const trimmed = newLabelInput.trim()
+    if (!trimmed) return
+    if (!selectedLabels.includes(trimmed)) {
+      setSelectedLabels(prev => [...prev, trimmed])
+    }
+    setNewLabelInput('')
+    setShowNewLabelInput(false)
+  }
+
+  const handleRemoveLabel = (label: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedLabels(prev => prev.filter(l => l !== label))
+  }
+
+  // Merge board labels with any labels on this card (covers custom ones added elsewhere)
+  const allAvailableLabels = Array.from(new Set([...boardLabels, ...selectedLabels])).sort()
 
   const toggleAssignee = (userId: number) => {
     if (selectedAssignees.includes(userId)) {
@@ -292,9 +326,12 @@ export default function CardDetailsModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Due Date */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              📅 Due Date
-            </label>
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                Due Date
+              </div>
             <input
               type="date"
               value={dueDate}
@@ -310,31 +347,89 @@ export default function CardDetailsModal({
 
           {/* Labels */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              🏷️ Labels
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {PRESET_LABELS.map((label) => (
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+              </svg>
+              Labels
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {allAvailableLabels.map((label) => {
+                const isSelected = selectedLabels.includes(label)
+                return (
+                  <div key={label} className="relative">
+                    <button
+                      onClick={() => toggleLabel(label)}
+                      className={`pl-2.5 pr-6 py-1 rounded-full text-xs font-medium transition-all ${
+                        isSelected
+                          ? getLabelColor(label, allAvailableLabels)
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {isSelected && <span className="mr-1 opacity-70">✓</span>}
+                      {label}
+                    </button>
+                    {isSelected && (
+                      <button
+                        onClick={(e) => handleRemoveLabel(label, e)}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center text-[10px] leading-none opacity-50 hover:opacity-100 transition-opacity"
+                        title={`Remove "${label}" from card`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+
+              {showNewLabelInput ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={newLabelRef}
+                    type="text"
+                    value={newLabelInput}
+                    onChange={(e) => setNewLabelInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleCreateLabel() }
+                      if (e.key === 'Escape') { setShowNewLabelInput(false); setNewLabelInput('') }
+                    }}
+                    placeholder="Label name…"
+                    maxLength={30}
+                    className="px-2 py-0.5 text-xs border border-indigo-400 rounded-full focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-28"
+                  />
+                  <button
+                    onClick={handleCreateLabel}
+                    disabled={!newLabelInput.trim()}
+                    className="px-2 py-0.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs rounded-full disabled:opacity-40 transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => { setShowNewLabelInput(false); setNewLabelInput('') }}
+                    className="text-gray-400 hover:text-gray-600 text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
                 <button
-                  key={label.name}
-                  onClick={() => toggleLabel(label.name)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                    selectedLabels.includes(label.name)
-                      ? `${label.color} text-white`
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
+                  onClick={() => setShowNewLabelInput(true)}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
                 >
-                  {label.name}
+                  + New label
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
           {/* Assignees */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              👥 Assigned To
-            </label>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              Assigned To
+            </div>
             <div className="flex flex-wrap gap-2">
               {boardMembers.map((member) => (
                 <button
@@ -362,9 +457,12 @@ export default function CardDetailsModal({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              📝 Description
-            </label>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+                <line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/>
+              </svg>
+              Description
+            </div>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -376,9 +474,12 @@ export default function CardDetailsModal({
 
           {/* Comments */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              💬 Comments ({comments.length})
-            </label>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              Comments {comments.length > 0 && `(${comments.length})`}
+            </div>
             
             {/* Add comment form */}
             <form onSubmit={handleAddComment} className="mb-4">
@@ -479,7 +580,7 @@ export default function CardDetailsModal({
               onClick={handleDelete}
               className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm font-medium"
             >
-              🗑️ Delete Card
+              Delete card
             </button>
           </div>
         </div>
