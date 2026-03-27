@@ -164,7 +164,7 @@ UI                        Zustand Store         Socket              Server      
 │                              │                   │                  │                │
 │                    <─ card with tempId ──        │                  │                │
 │ (instant render!)            │                   │                  │                │
-│                              ├─ emit('card-created', {title, listId, tempId}) ──>  │
+│                              ├─ emit('card-created', {title, listId, tempId}) ──>    │
 │                              │                   │                  │                │
 │                              │                   │                  ├─ INSERT card ──>
 │                              │                   │                  │              <─┤
@@ -174,17 +174,17 @@ UI                        Zustand Store         Socket              Server      
 │                              │                   │                  │  (to room 'board:abc123')
 │                              │                  <──────────────────┤
 │                              │  'card-created'  {card, tempId}     │
-│                              │                                      │
-│                    const old = findByTempId(tempId)               │
-│                    if (old) {                                     │
-│                      replaceCard(old.id, card)  // reconcile     │
-│                    } else {                                       │
-│                      addCard(card)  // I didn't emit it         │
-│                    }                                              │
-│                              │                   │                  │
-│ (UI unchanged, but          │                   │                  │
-│  card.id is now real)        │                   │                  │
-│                              │                   │                  │
+│                              │                                     │
+│                    const old = findByTempId(tempId)                │
+│                    if (old) {                                      │
+│                      replaceCard(old.id, card)  // reconcile       │
+│                    } else {                                        │
+│                      addCard(card)  // I didn't emit it            │
+│                    }                                               │
+│                              │                   │                 │
+│ (UI unchanged, but           │                   │                 │
+│  card.id is now real)        │                   │                 │
+│                              │                   │                 │
 ```
 
 **Key insight:** Optimistic update happens first, server confirms with real ID, client reconciles.
@@ -589,7 +589,7 @@ app.get('/metrics', (req, res) => {
 });
 ```
 
-**Why?** Deployment platforms (Render, Heroku) ping `/health` to verify the app is alive. `/metrics` is used for monitoring and scaling decisions.
+**Why?** Deployment platforms (Northflank, Heroku) ping `/health` to verify the app is alive. `/metrics` is used for monitoring and scaling decisions.
 
 ---
 

@@ -59,7 +59,7 @@ if (scalingConfig.useRedisAdapter) {
 
 **Also needed:**
 - Load balancer (AWS ALB or Nginx) with sticky sessions
-- 3-5 server instances (Railway or Render paid tier)
+- 3-5 server instances (Northflank or other paid tier)
 - PostgreSQL read replica (Neon paid tier supports this)
 
 ---
