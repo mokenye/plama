@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { authApi } from '../services/api'
 import { useAuthStore } from '../store'
+import GoogleSignInButton from '../components/Auth/GoogleSignInButton'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -66,6 +67,14 @@ export default function RegisterPage() {
               {error}
             </div>
           )}
+
+          <GoogleSignInButton onError={setError} setLoading={setLoading} text="signup_with" />
+
+          <div className="flex items-center gap-3 my-1">
+            <div className="flex-1 h-px bg-white/[0.08]" />
+            <span className="text-xs text-white/20 uppercase tracking-wider">or</span>
+            <div className="flex-1 h-px bg-white/[0.08]" />
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

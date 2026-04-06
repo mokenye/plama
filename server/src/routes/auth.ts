@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
+import { OAuth2Client } from 'google-auth-library';
 import { executeRead, executeWrite } from '../db/connection';
 import { signToken } from '../utils/jwt';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+const googleClient = new OAuth2Client();
 
 // --------------------------------
 // Input Validation Schemas
@@ -106,6 +108,81 @@ router.post('/login', async (req: Request, res: Response) => {
     });
   } catch (error) {
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// --------------------------------
+// POST /api/auth/google
+// --------------------------------
+const googleSchema = z.object({
+  credential: z.string().min(1),
+});
+
+router.post('/google', async (req: Request, res: Response) => {
+  try {
+    const parsed = googleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Missing Google credential' });
+    }
+
+    const { credential } = parsed.data;
+
+    // Verify the Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email || !payload.sub) {
+      return res.status(401).json({ error: 'Invalid Google token' });
+    }
+
+    const { sub: googleId, email, name: googleName, picture } = payload;
+    const displayName = googleName || email.split('@')[0];
+
+    // Check if user already exists (by google_id or email)
+    let user = (await executeRead(
+      'SELECT id, name, email, avatar_url, google_id FROM users WHERE google_id = $1',
+      [googleId]
+    )).rows[0];
+
+    if (!user) {
+      // Check if an email-based account already exists (link it)
+      user = (await executeRead(
+        'SELECT id, name, email, avatar_url, google_id FROM users WHERE email = $1',
+        [email]
+      )).rows[0];
+
+      if (user && !user.google_id) {
+        // Link Google to existing email account
+        await executeWrite(
+          'UPDATE users SET google_id = $1, auth_provider = CASE WHEN auth_provider = \'local\' THEN \'both\' ELSE auth_provider END, avatar_url = COALESCE(avatar_url, $2) WHERE id = $3',
+          [googleId, picture || null, user.id]
+        );
+      } else if (!user) {
+        // Create new user
+        const result = await executeWrite(
+          `INSERT INTO users (name, email, google_id, avatar_url, auth_provider)
+           VALUES ($1, $2, $3, $4, 'google')
+           RETURNING id, name, email, avatar_url`,
+          [displayName, email, googleId, picture || null]
+        );
+        user = result.rows[0];
+      }
+    }
+
+    const token = signToken({ userId: user.id, email: user.email || email, name: user.name || displayName });
+
+    res.json({
+      user: { id: user.id, name: user.name || displayName, email: user.email || email, avatar_url: user.avatar_url },
+      token,
+    });
+  } catch (error: any) {
+    if (error.message?.includes('Token used too late') || error.message?.includes('Invalid token')) {
+      return res.status(401).json({ error: 'Google token expired or invalid' });
+    }
+    res.status(500).json({ error: 'Google authentication failed' });
   }
 });
 

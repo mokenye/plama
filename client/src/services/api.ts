@@ -54,6 +54,11 @@ export const authApi = {
     return res.data;
   },
 
+  google: async (credential: string) => {
+    const res = await api.post<AuthResponse>('/auth/google', { credential });
+    return res.data;
+  },
+
   ping: () => api.get('/ping').catch(() => {})
 };
 
