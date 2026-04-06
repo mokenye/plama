@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 // import pg from 'pg';
 import { logger } from '../utils/logger';
+import { dbQueryDuration } from '../metrics';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -42,11 +43,14 @@ export const readPool = new Pool({
 // ================================
 export const executeRead = async (query: string, params: any[] = []) => {
   const start = Date.now();
+  const endTimer = dbQueryDuration.startTimer({ operation: 'read' });
   try {
     const result = await readPool.query(query, params);
+    endTimer({ status: 'success' });
     logger.debug({ query, duration: Date.now() - start, rows: result.rowCount }, 'DB read');
     return result;
   } catch (error) {
+    endTimer({ status: 'error' });
     logger.error({ query, error }, 'DB read error');
     throw error;
   }
@@ -54,11 +58,14 @@ export const executeRead = async (query: string, params: any[] = []) => {
 
 export const executeWrite = async (query: string, params: any[] = []) => {
   const start = Date.now();
+  const endTimer = dbQueryDuration.startTimer({ operation: 'write' });
   try {
     const result = await writePool.query(query, params);
+    endTimer({ status: 'success' });
     logger.debug({ query, duration: Date.now() - start, rows: result.rowCount }, 'DB write');
     return result;
   } catch (error) {
+    endTimer({ status: 'error' });
     logger.error({ query, error }, 'DB write error');
     throw error;
   }
@@ -77,14 +84,17 @@ export const executeTransaction = async <T>(
   fn: (client: import('pg').PoolClient) => Promise<T>
 ): Promise<T> => {
   const client = await writePool.connect();
+  const endTimer = dbQueryDuration.startTimer({ operation: 'transaction' });
   try {
     await client.query('BEGIN');
     const result = await fn(client);
     await client.query('COMMIT');
+    endTimer({ status: 'success' });
     logger.debug('DB transaction committed');
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
+    endTimer({ status: 'rollback' });
     logger.error({ error }, 'DB transaction rolled back');
     throw error;
   } finally {
@@ -112,13 +122,15 @@ export const schema = `
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255),            
     name VARCHAR(100) NOT NULL,
     avatar_url VARCHAR(500),
+    google_id VARCHAR(255) UNIQUE,         
+    auth_provider VARCHAR(20) DEFAULT 'local', 
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   );
-
+ 
   CREATE TABLE IF NOT EXISTS boards (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,

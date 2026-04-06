@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import { httpRequestTotal, httpRequestDuration } from '../metrics';
 
-// Simple in-memory metrics
-// In production: swap for Prometheus + Grafana
+// Simple in-memory metrics (kept for backward-compatible /metrics JSON endpoint)
 export const metrics = {
   requests: 0,
   errors: 0,
@@ -11,6 +11,7 @@ export const metrics = {
 
 export const metricsMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
+  const end = httpRequestDuration.startTimer();
 
   metrics.requests++;
   metrics.activeConnections++;
@@ -29,6 +30,12 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
     if (res.statusCode >= 400) {
       metrics.errors++;
     }
+
+    // Prometheus metrics — use route pattern to avoid label cardinality explosion
+    const route = req.route?.path ?? req.path;
+    const labels = { method: req.method, route, status: String(res.statusCode) };
+    httpRequestTotal.inc(labels);
+    end(labels);
   });
 
   next();

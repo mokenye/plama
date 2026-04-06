@@ -1,5 +1,6 @@
 import { createClient } from 'redis';
 import { logger } from '../utils/logger';
+import { redisPresenceOps } from '../metrics';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -39,7 +40,9 @@ export const addUserToBoard = async (boardId: number, userId: number, userName: 
       joinedAt: Date.now(),
     }));
     await client.expire(`board:${boardId}:users`, 3600); // 1 hour TTL
+    redisPresenceOps.inc({ result: 'hit' });
   } catch (error) {
+    redisPresenceOps.inc({ result: 'error' });
     logger.error('Redis presence error (addUserToBoard):', error);
   }
 };
@@ -47,7 +50,9 @@ export const addUserToBoard = async (boardId: number, userId: number, userName: 
 export const removeUserFromBoard = async (boardId: number, userId: number) => {
   try {
     await client.hDel(`board:${boardId}:users`, userId.toString());
+    redisPresenceOps.inc({ result: 'hit' });
   } catch (error) {
+    redisPresenceOps.inc({ result: 'error' });
     logger.error('Redis presence error (removeUserFromBoard):', error);
   }
 };
@@ -55,8 +60,10 @@ export const removeUserFromBoard = async (boardId: number, userId: number) => {
 export const getActiveUsers = async (boardId: number) => {
   try {
     const users = await client.hGetAll(`board:${boardId}:users`);
+    redisPresenceOps.inc({ result: 'hit' });
     return Object.values(users).map((u) => JSON.parse(u));
   } catch (error) {
+    redisPresenceOps.inc({ result: 'error' });
     logger.error('Redis presence error (getActiveUsers):', error);
     return [];
   }

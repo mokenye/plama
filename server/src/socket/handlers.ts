@@ -3,6 +3,14 @@ import { logger } from '../utils/logger';
 import { transformCard } from '../utils/transform';
 import { logActivity } from '../utils/activityLogger';
 import {
+  wsEventsTotal,
+  wsEventDuration,
+  wsBoardRoomSize,
+  optimisticRollbacks,
+  cardMovesTotal,
+  redisPresenceOps,
+} from '../metrics';
+import {
   addUserToBoard,
   removeUserFromBoard,
   getActiveUsers,
@@ -30,6 +38,7 @@ const addUserToPresence = async (boardId: number, userId: number, userName: stri
   try {
     await addUserToBoard(boardId, userId, userName);
   } catch {
+    redisPresenceOps.inc({ result: 'fallback' });
     // Fallback to in-memory
     if (!inMemoryPresence.has(boardId)) {
       inMemoryPresence.set(boardId, new Map());
@@ -42,6 +51,7 @@ const removeUserFromPresence = async (boardId: number, userId: number) => {
   try {
     await removeUserFromBoard(boardId, userId);
   } catch {
+    redisPresenceOps.inc({ result: 'fallback' });
     // Fallback to in-memory
     inMemoryPresence.get(boardId)?.delete(userId);
   }
@@ -51,6 +61,7 @@ const getActiveUsersFromPresence = async (boardId: number): Promise<any[]> => {
   try {
     return await getActiveUsers(boardId);
   } catch {
+    redisPresenceOps.inc({ result: 'fallback' });
     // Fallback to in-memory
     const users = inMemoryPresence.get(boardId);
     return users ? Array.from(users.values()) : [];
@@ -102,6 +113,7 @@ export const setupSocketHandlers = (io: Server) => {
     // Board: Join / Leave
     // --------------------------------
     socket.on('join-board', async ({ boardId }: { boardId: number }) => {
+      wsEventsTotal.inc({ event: 'join-board' });
       socket.join(`board:${boardId}`);
       socketBoards.get(socket.id)?.add(boardId);
 
@@ -120,6 +132,7 @@ export const setupSocketHandlers = (io: Server) => {
     });
 
     socket.on('leave-board', async ({ boardId }: { boardId: number }) => {
+      wsEventsTotal.inc({ event: 'leave-board' });
       socket.leave(`board:${boardId}`);
       socketBoards.get(socket.id)?.delete(boardId);
       await removeUserFromPresence(boardId, socket.userId!);
@@ -146,6 +159,8 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
       tempId: string; // Client-generated temp ID for optimistic updates
     }) => {
+      wsEventsTotal.inc({ event: 'card-created' });
+      const endTimer = wsEventDuration.startTimer({ event: 'card-created' });
       try {
         // Get max position in list
         const posResult = await executeWrite(
@@ -186,12 +201,15 @@ export const setupSocketHandlers = (io: Server) => {
         });
 
       } catch (error) {
+        optimisticRollbacks.inc({ event: 'card-created' });
         logger.error({ error, data }, 'Failed to create card');
         socket.emit('card-error', {
           type: 'card-created',
           tempId: data.tempId,
           message: 'Failed to create card',
         });
+      } finally {
+        endTimer();
       }
     });
 
@@ -204,6 +222,8 @@ export const setupSocketHandlers = (io: Server) => {
       assignees?: number[];
       boardId: number;
     }) => {
+      wsEventsTotal.inc({ event: 'card-updated' });
+      const endTimer = wsEventDuration.startTimer({ event: 'card-updated' });
       try {
         // Fetch old assignees BEFORE the update so we can diff them
         const oldCardResult = await executeWrite(
@@ -282,12 +302,15 @@ export const setupSocketHandlers = (io: Server) => {
         });
 
       } catch (error) {
+        optimisticRollbacks.inc({ event: 'card-updated' });
         logger.error({ error, data }, 'Failed to update card');
         socket.emit('card-error', {
           type: 'card-updated',
           cardId: data.cardId,
           message: 'Failed to update card',
         });
+      } finally {
+        endTimer();
       }
     });
 
@@ -299,6 +322,8 @@ export const setupSocketHandlers = (io: Server) => {
       oldPosition: number;
       boardId: number;
     }) => {
+      wsEventsTotal.inc({ event: 'card-moved' });
+      const endTimer = wsEventDuration.startTimer({ event: 'card-moved' });
       try {
         // Get card title, assignees, and list names for activity + notifications
         const cardResult = await executeWrite(
@@ -375,7 +400,10 @@ export const setupSocketHandlers = (io: Server) => {
           movedBy: { id: socket.userId, name: socket.userName },
         });
 
+        cardMovesTotal.inc();
+
       } catch (error) {
+        optimisticRollbacks.inc({ event: 'card-moved' });
         logger.error({ error, data }, 'Failed to move card');
         // Tell sender to rollback optimistic update
         socket.emit('card-move-failed', {
@@ -383,6 +411,8 @@ export const setupSocketHandlers = (io: Server) => {
           oldListId: data.oldListId,
           oldPosition: data.oldPosition,
         });
+      } finally {
+        endTimer();
       }
     });
 
@@ -391,6 +421,8 @@ export const setupSocketHandlers = (io: Server) => {
       listId: number;
       boardId: number;
     }) => {
+      wsEventsTotal.inc({ event: 'card-deleted' });
+      const endTimer = wsEventDuration.startTimer({ event: 'card-deleted' });
       try {
         // Get card title before deleting
         const cardResult = await executeWrite(
@@ -419,12 +451,15 @@ export const setupSocketHandlers = (io: Server) => {
         });
 
       } catch (error) {
+        optimisticRollbacks.inc({ event: 'card-deleted' });
         logger.error({ error, data }, 'Failed to delete card');
         socket.emit('card-error', {
           type: 'card-deleted',
           cardId: data.cardId,
           message: 'Failed to delete card',
         });
+      } finally {
+        endTimer();
       }
     });
 

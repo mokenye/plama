@@ -6,8 +6,9 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 
-import { logger } from './utils/logger';
+import { logger, requestLoggerMiddleware } from './utils/logger';
 import { metricsMiddleware, metrics } from './middleware/metrics';
+import { register, wsConnectionsActive } from './metrics';
 import { setupSocketHandlers } from './socket/handlers';
 import { setIo } from './utils/notifications';
 import { testDatabaseConnection } from './db/connection';
@@ -46,6 +47,17 @@ const io = new Server(httpServer, {
 
 // Give notifications util a reference to io without creating a circular import
 setIo(io); 
+
+// Track WebSocket connections for Prometheus
+io.on('connection', () => {
+  wsConnectionsActive.inc();
+});
+io.engine.on('connection_error', () => {});
+io.on('connection', (socket) => {
+  socket.on('disconnect', () => {
+    wsConnectionsActive.dec();
+  });
+});
 // This allows us to emit notifications from anywhere in the codebase without importing the server directly, which can lead to circular dependencies. 
 // Cicular dependencies can cause issues in Node.js, such as modules being partially loaded, which can lead to unexpected behavior. By using a setter function like setIo, we can avoid this problem while still providing access to the Socket.io instance where it's needed. 
 // Here, we call setIo(io) after creating the Socket.io server, allowing us to store the reference to io in a way that can be accessed by other modules without directly importing the server module. This is a common pattern to avoid circular dependencies while still sharing important instances across the application.
@@ -53,12 +65,17 @@ setIo(io);
 // ================================
 // Middleware
 // ================================
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+  next()
+})
 app.use(helmet());
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 }));
 app.use(express.json());
+app.use(requestLoggerMiddleware);
 app.use(metricsMiddleware);
 
 // Rate limiting
@@ -109,6 +126,16 @@ app.get('/metrics', (req, res) => {
     activeConnections: metrics.activeConnections,
     activeWebSocketConnections: io.engine.clientsCount,
   });
+});
+
+// Prometheus metrics endpoint (text format for scraping)
+app.get('/metrics/prometheus', async (req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (error) {
+    res.status(500).end();
+  }
 });
 
 app.use('/api/auth', authRoutes);
