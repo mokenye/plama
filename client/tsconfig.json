@@ -14,11 +14,7 @@
     "strict": true,
     "noUnusedLocals": false, // set to true to report errors on unused local variables. Otherwise currently false for Vercel build
     "noUnusedParameters": false, // set to true to report errors on unused function parameters
-    "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
