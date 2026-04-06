@@ -78,7 +78,6 @@ jobs:
           node-version: 24
       - name: Deploy to Vercel
         run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
-        working-directory: client
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -89,11 +88,10 @@ jobs:
     needs: [server-check, client-check]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v6
-      - name: Deploy to Northflank
-        uses: northflank/deploy-to-northflank@v1
-        with:
-          northflank-api-key: ${{ secrets.NORTHFLANK_API_KEY }}
-          project-id: sydney-tracker
-          service-id: plama
-          
+      - name: Trigger Northflank deployment
+        run: |
+          curl --fail -X POST \
+            "https://api.northflank.com/v1/projects/sydney-tracker/services/plama/deploy" \
+            -H "Authorization: Bearer ${{ secrets.NORTHFLANK_API_KEY }}" \
+            -H "Content-Type: application/json"
+            
