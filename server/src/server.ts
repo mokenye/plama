@@ -29,8 +29,8 @@ dotenv.config();
 // ================================
 // App Setup
 // ================================
-const app = express();
-const httpServer = createServer(app);
+export const app = express();
+export const httpServer = createServer(app);
 
 // ================================
 // Socket.io Setup
@@ -198,9 +198,11 @@ const start = async () => {
   });
 };
 
-start().catch((error) => {
-  logger.error('Failed to start server:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch((error) => {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  });
+}
 
 export { io };

@@ -1,6 +1,27 @@
 import axios from 'axios';
+import { createServer } from 'http';
+import type { Server } from 'http';
+import type { AddressInfo } from 'net';
 
-const BASE = process.env.BASE_URL || process.env.TEST_BASE_URL || 'http://localhost:3000';
+// Import only the Express app, not the full start() bootstrap
+// (avoids needing a live DB/Redis in CI for these endpoint checks)
+import { app } from '../src/server';
+
+let server: Server;
+let BASE: string;
+
+beforeAll(async () => {
+  server = createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  BASE = `http://127.0.0.1:${port}`;
+});
+
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) =>
+    server.close((err) => (err ? reject(err) : resolve()))
+  );
+});
 
 describe('Smoke tests - HTTP endpoints', () => {
   jest.setTimeout(20000);
