@@ -311,7 +311,7 @@ plama/
 │       ├── middleware/       # JWT auth, HTTP metrics collection
 │       └── utils/            # Logger (Pino + request IDs), notifications, transforms
 │
-├── .github/workflows/ci.yml  # GitHub Actions CI (build, lint, test)
+├── .github/workflows/ci.yml  # GitHub Actions CI (build, lint, test, deploy)
 ├── docker-compose.yml         # Postgres + Redis + Prometheus + Grafana
 ├── prometheus.yml             # Prometheus scrape config
 └── grafana/provisioning/      # Auto-configured Prometheus data source
@@ -390,7 +390,7 @@ On every push to `main` and every PR:
 | **Server — Build & Test** | TypeScript compile, DB migrations, Jest tests (with real Postgres + Redis service containers) |
 | **Client — Lint & Build** | ESLint, TypeScript compile, Vite production build |
 
-Both jobs run in parallel. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI jobs run in parallel. Deployments to Vercel and Northflank are gated — they only trigger on push to main after both jobs pass. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
