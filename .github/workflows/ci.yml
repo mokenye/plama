@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server-check:
+    name: Server — Build & Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: plama
+          POSTGRES_PASSWORD: plama
+          POSTGRES_DB: plama_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgresql://plama:plama@localhost:5432/plama_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Install dependencies
+        run: cd server && npm ci
+      - name: TypeScript compile
+        run: cd server && npx tsc --noEmit
+      - name: Run migrations
+        run: cd server && npm run db:migrate
+      - name: Run tests
+        run: cd server && npm test
+
+  client-check:
+    name: Client — Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Install dependencies
+        run: cd client && npm ci
+      - name: Lint
+        run: cd client && npm run lint
+      - name: TypeScript compile
+        run: cd client && npx tsc --noEmit
+      - name: Build
+        run: cd client && npm run build
