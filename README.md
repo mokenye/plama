@@ -25,7 +25,7 @@ Remote teams need lightweight, real-time collaboration without the complexity or
 - **Activity log** — Full board history: who did what and when
 - **Undo** — Destructive actions (delete card, delete list, delete board) have a 5-second cancellation window before committing
 - **Conflict resolution** — Concurrent card moves are wrapped in database transactions; failed operations roll back gracefully on all clients
-- **Auth** — JWT-based authentication with protected routes and role-aware UI (owners vs. members)
+- **Auth** — JWT-based authentication with Google OAuth and email/password; protected routes and role-aware UI (owners vs. members)
 - **Dark mode** — Persistent preference, toggle from any screen
 - **Graceful degradation** — Connection loss banner, automatic reconnection, board rejoin on reconnect
 
@@ -172,7 +172,7 @@ s.off('card-moved',   h.onCardMoved);
 | Backend | Node.js + Express | Event-driven I/O, natural fit for WebSocket workloads |
 | Database | PostgreSQL (Neon) | ACID transactions, relational integrity, serverless scaling |
 | Cache/Presence | Redis (Upstash) | Sub-millisecond reads, built-in pub/sub for future scaling |
-| Auth | JWT | Stateless, works cleanly with WebSocket handshake auth |
+| Auth | JWT + Google OAuth | Stateless tokens, one-click sign-in via Google Identity Services |
 | Validation | Zod | Runtime type safety on all API inputs |
 | Logging | Pino | Structured JSON logs, negligible overhead |
 | Deploy | Vercel + Northflank | Zero-config CI/CD, global CDN for static assets |
@@ -200,9 +200,11 @@ cd ../client && npm install
 ```bash
 cd server && cp .env.example .env
 # Fill in: DATABASE_URL, REDIS_URL, JWT_SECRET, CLIENT_URL
+# Optional: GOOGLE_CLIENT_ID (for Google OAuth — get from Google Cloud Console)
 
 cd ../client && cp .env.example .env
 # VITE_API_URL can be left empty for local dev (Vite proxy handles it)
+# Optional: VITE_GOOGLE_CLIENT_ID (same value as server's GOOGLE_CLIENT_ID)
 ```
 
 ### 3. Set up database
@@ -301,14 +303,94 @@ plama/
 │       ├── store/            # Zustand stores (auth, boards, active board)
 │       └── types/            # Shared TypeScript types
 │
-└── server/
-    └── src/
-        ├── routes/           # REST endpoints (auth, boards, lists, cards, notifications)
-        ├── socket/           # WebSocket handlers (real-time core + concurrency logic)
-        ├── db/               # PostgreSQL pools, executeTransaction, Redis client
-        ├── middleware/       # JWT auth, metrics
-        └── utils/            # Notifications (socket push + DB), activity logger, transforms
+├── server/
+│   └── src/
+│       ├── routes/           # REST endpoints (auth, boards, lists, cards, notifications)
+│       ├── socket/           # WebSocket handlers (real-time core + concurrency logic)
+│       ├── db/               # PostgreSQL pools, executeTransaction, Redis client
+│       ├── middleware/       # JWT auth, HTTP metrics collection
+│       └── utils/            # Logger (Pino + request IDs), notifications, transforms
+│
+├── .github/workflows/ci.yml  # GitHub Actions CI (build, lint, test)
+├── docker-compose.yml         # Postgres + Redis + Prometheus + Grafana
+├── prometheus.yml             # Prometheus scrape config
+└── grafana/provisioning/      # Auto-configured Prometheus data source
 ```
+
+---
+
+## Observability
+
+Full observability stack: **Prometheus** for metrics, **Grafana** for dashboards, **Pino** for structured logs — all tailored for real-time WebSocket workloads.
+
+### Metrics (Prometheus + Grafana)
+
+The server exposes Prometheus-format metrics at `/metrics/prometheus`, covering:
+
+| Category | Metrics |
+|----------|---------|
+| HTTP | `http_requests_total`, `http_request_duration_seconds` (with method, route, status labels) |
+| WebSocket | `ws_connections_active`, `ws_events_total`, `ws_event_duration_seconds`, `ws_board_room_size` |
+| Database | `db_query_duration_seconds` (read/write/transaction with success/error/rollback status) |
+| App-specific | `plama_card_moves_total`, `plama_optimistic_rollbacks_total`, `plama_notifications_sent_total`, `plama_redis_presence_ops_total` |
+| Node.js | Default `prom-client` metrics (heap, GC, event loop lag) |
+
+The existing JSON `/metrics` endpoint is preserved for backward compatibility.
+
+**Key Grafana queries:**
+
+```promql
+# WebSocket event throughput by type
+sum(rate(ws_events_total[5m])) by (event)
+
+# card-moved p95 latency
+histogram_quantile(0.95, rate(ws_event_duration_seconds_bucket{event="card-moved"}[5m]))
+
+# Optimistic rollback rate — rising = something wrong
+sum(rate(plama_optimistic_rollbacks_total[5m])) by (event)
+
+# DB transaction rollback ratio
+rate(db_query_duration_seconds_count{status="rollback"}[5m])
+  / rate(db_query_duration_seconds_count{operation="transaction"}[5m])
+
+# Node.js event loop lag
+nodejs_eventloop_lag_seconds
+```
+
+**Run the stack locally:**
+
+```bash
+docker compose up -d                # Starts Postgres, Redis, Prometheus, Grafana
+cd server && npm run dev            # Start the server (port 3000)
+```
+
+- Prometheus: [http://localhost:9090](http://localhost:9090)
+- Grafana: [http://localhost:3001](http://localhost:3001) (admin / admin)
+- Prometheus data source is auto-provisioned — start building dashboards immediately
+
+### Structured Logging (Pino)
+
+Every log line is structured JSON in production with:
+- `service`: `plama-server`
+- `requestId`: UUID correlation ID (propagated via `x-request-id` header)
+- `method`, `path`, `statusCode`, `duration` on every HTTP request
+
+```json
+{"level":30,"time":1712345678,"service":"plama-server","requestId":"a1b2c3d4","method":"GET","path":"/api/boards","statusCode":200,"duration":12,"msg":"request completed"}
+```
+
+Socket events include `userId` and `boardId` context via Pino child loggers.
+
+### CI/CD (GitHub Actions)
+
+On every push to `main` and every PR:
+
+| Job | What it checks |
+|-----|----------------|
+| **Server — Build & Test** | TypeScript compile, DB migrations, Jest tests (with real Postgres + Redis service containers) |
+| **Client — Lint & Build** | ESLint, TypeScript compile, Vite production build |
+
+Both jobs run in parallel. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
