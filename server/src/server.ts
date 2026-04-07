@@ -130,13 +130,28 @@ app.get('/metrics', (req, res) => {
 
 // Prometheus metrics endpoint (text format for scraping)
 app.get('/metrics/prometheus', async (req, res) => {
-  try {
-    res.set('Content-Type', register.contentType);
-    res.end(await register.metrics());
-  } catch (error) {
-    res.status(500).end();
+  const user = process.env.METRICS_USERNAME
+  const pass = process.env.METRICS_PASSWORD
+
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.set('WWW-Authenticate', 'Basic realm="metrics"')
+    return res.status(401).end()
   }
-});
+
+  const base64 = authHeader.slice(6)
+  const [reqUser, reqPass] = Buffer.from(base64, 'base64').toString().split(':')
+  if (reqUser !== user || reqPass !== pass) {
+    return res.status(401).end()
+  }
+
+  try {
+    res.set('Content-Type', register.contentType)
+    res.end(await register.metrics())
+  } catch (error) {
+    res.status(500).end()
+  }
+})
 
 app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardRoutes);
