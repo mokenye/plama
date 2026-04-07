@@ -130,18 +130,11 @@ app.get('/metrics', (req, res) => {
 
 // Prometheus metrics endpoint (text format for scraping)
 app.get('/metrics/prometheus', async (req, res) => {
-  const user = process.env.METRICS_USERNAME
-  const pass = process.env.METRICS_PASSWORD
+  const token = process.env.METRICS_TOKEN
 
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.set('WWW-Authenticate', 'Basic realm="metrics"')
-    return res.status(401).end()
-  }
-
-  const base64 = authHeader.slice(6)
-  const [reqUser, reqPass] = Buffer.from(base64, 'base64').toString().split(':')
-  if (reqUser !== user || reqPass !== pass) {
+  if (!token || !authHeader || authHeader !== `Bearer ${token}`) {
+    res.set('WWW-Authenticate', 'Bearer realm="metrics"')
     return res.status(401).end()
   }
 
