@@ -5,6 +5,8 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import BoardPage from './pages/BoardPage'
 import LandingPage from './pages/LandingPage'
+import { SpeedInsights } from '@vercel/speed-insights/react'
+import { Analytics } from '@vercel/analytics/react'
 
 // Authenticated users go to dashboard, guests go to landing
 const RootRoute = () => {
@@ -48,6 +50,8 @@ export default function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <SpeedInsights /> 
+      <Analytics /> 
     </BrowserRouter>
   )
 }
