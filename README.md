@@ -390,7 +390,7 @@ On every push to `main` and every PR:
 | **Server — Build & Test** | TypeScript compile, DB migrations, Jest tests (with real Postgres + Redis service containers) |
 | **Client — Lint & Build** | ESLint, TypeScript compile, Vite production build |
 
-CI jobs run in parallel. Deployments to Vercel and Northflank are gated — they only trigger on push to main after both jobs pass. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI jobs run in parallel. Deployments to Vercel and Northflank are gated — they only trigger on push to main after both jobs pass, with the backend deploying before the frontend to prevent API mismatches. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
