@@ -101,8 +101,8 @@ jobs:
             "https://api.northflank.com/v1/projects/sydney-tracker/services/plama/deployment" \
             -H "Authorization: Bearer ${{ secrets.NORTHFLANK_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{\"buildId\": \"${{ steps.build.outputs.build_id }}\"}"
-
+            -d "{\"internal\": {\"id\": \"plama\", \"branch\": \"main\", \"buildId\": \"${{ steps.build.outputs.build_id }}\"}}"
+            
   deploy-frontend:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
