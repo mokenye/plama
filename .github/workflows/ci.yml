@@ -90,7 +90,7 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.NORTHFLANK_API_KEY }}" | jq -r '.data.status')
             echo "Build status: $STATUS"
             if [ "$STATUS" = "SUCCESS" ]; then exit 0; fi
-            if [ "$STATUS" = "FAILED" ]; then echo "Build failed"; exit 1; fi
+            if [ "$STATUS" = "FAILURE" ]; then echo "Build failed"; exit 1; fi
             sleep 20
           done
           echo "Timed out waiting for build"; exit 1
