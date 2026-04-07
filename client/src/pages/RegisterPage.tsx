@@ -65,6 +65,11 @@ export default function RegisterPage() {
           {error && (
             <div className="mb-5 px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/[0.08] text-red-400 text-sm">
               {error}
+              {error === 'Email already registered' && (
+                <span className="ml-1">
+                  <Link to="/login" className="underline hover:text-red-300 transition">Sign in instead?</Link>
+                </span>
+              )}
             </div>
           )}
 
