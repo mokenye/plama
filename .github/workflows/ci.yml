@@ -89,7 +89,7 @@ jobs:
               "https://api.northflank.com/v1/projects/sydney-tracker/services/plama/builds/${{ steps.build.outputs.build_id }}" \
               -H "Authorization: Bearer ${{ secrets.NORTHFLANK_API_KEY }}" | jq -r '.data.status')
             echo "Build status: $STATUS"
-            if [ "$STATUS" = "SUCCEEDED" ]; then exit 0; fi
+            if [ "$STATUS" = "COMPLETED" ]; then exit 0; fi
             if [ "$STATUS" = "FAILED" ]; then echo "Build failed"; exit 1; fi
             sleep 20
           done
