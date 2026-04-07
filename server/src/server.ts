@@ -96,6 +96,20 @@ const loginLimiter = rateLimit({
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/', limiter);
 
+// Grafana Cloud metrics endpoint probe — must return 401 on first unauthenticated request
+app.use((req, res, next) => {
+  if (req.path !== '/metrics/prometheus') return next()
+  
+  const token = process.env.METRICS_TOKEN
+  const authHeader = req.headers.authorization
+  
+  if (!token || !authHeader || authHeader !== `Bearer ${token}`) {
+    res.set('WWW-Authenticate', 'Bearer realm="metrics"')
+    return res.status(401).end()
+  }
+  next()
+})
+
 // Warmup
 app.get('/api/ping', (req, res) => res.sendStatus(200));
 
