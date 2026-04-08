@@ -10,24 +10,24 @@
 
 ## What Problem Does This Solve?
 
-Remote teams need lightweight, real-time collaboration without the complexity or cost of Trello or Jira. Plama demonstrates production-grade real-time architecture — the same patterns used in trading platforms, collaborative design tools, and live dashboards — applied to a problem everyone understands.
+Remote teams need lightweight, real-time collaboration without the complexity or cost of Trello or Jira. Plama is a working example of the architecture behind collaborative design tools, live dashboards, and trading platforms, applied to a problem simple enough to reason about end-to-end.
 
 ---
 
 ## Features
 
-- **Real-time sync** — Card and list changes propagate to all users in <50ms
-- **Optimistic UI** — Every action feels instant; the UI updates before the server confirms
-- **Live presence** — See who's online, who's away, and who's actively on your board
-- **Drag-and-drop** — Reorder cards within lists, move cards across lists, reorder lists — all synced in real time
-- **Notifications** — Personal alerts pushed instantly via WebSocket (assignment, comments, invites, card moves); badge updates without polling
-- **Board ownership** — Dashboard separates your boards from boards shared with you, with owner attribution
-- **Activity log** — Full board history: who did what and when
-- **Undo** — Destructive actions (delete card, delete list, delete board) have a 5-second cancellation window before committing
-- **Conflict resolution** — Concurrent card moves are wrapped in database transactions; failed operations roll back gracefully on all clients
-- **Auth** — JWT-based authentication with Google OAuth and email/password; protected routes and role-aware UI (owners vs. members)
-- **Dark mode** — Persistent preference, toggle from any screen
-- **Graceful degradation** — Connection loss banner, automatic reconnection, board rejoin on reconnect
+- **Real-time sync**: Card and list changes propagate to all users in <50ms
+- **Optimistic UI**: Every action feels instant; the UI updates before the server confirms
+- **Live presence**: See who's online, who's away, and who's actively on your board
+- **Drag-and-drop**: Reorder cards within lists, move cards across lists, reorder lists: all synced in real time
+- **Notifications**: Personal alerts pushed instantly via WebSocket (assignment, comments, invites, card moves); badge updates without polling
+- **Board ownership**: Dashboard separates your boards from boards shared with you, with owner attribution
+- **Activity log**: Full board history: who did what and when
+- **Undo**: Destructive actions (delete card, delete list, delete board) have a 5-second cancellation window before committing
+- **Conflict resolution**: Concurrent card moves are wrapped in database transactions; failed operations roll back gracefully on all clients
+- **Auth**: JWT-based authentication with Google OAuth and email/password; protected routes and role-aware UI (owners vs. members)
+- **Dark mode**: Persistent preference, toggle from any screen
+- **Graceful degradation**: Connection loss banner, automatic reconnection, board rejoin on reconnect
 
 ---
 
@@ -55,11 +55,11 @@ Remote teams need lightweight, real-time collaboration without the complexity or
 ```
 
 **Communication pattern:**
-- **REST API** — Auth, initial board load, list and board CRUD
-- **WebSocket (board room)** — All card mutations, list moves, presence events; broadcast to `board:{id}` room
-- **WebSocket (user socket)** — Personal notifications pushed directly to the recipient's socket, bypassing the board room entirely
+- **REST API**: Auth, initial board load, list and board CRUD
+- **WebSocket (board room)**: All card mutations, list moves, presence events; broadcast to `board:{id}` room
+- **WebSocket (user socket)**: Personal notifications pushed directly to the recipient's socket, bypassing the board room entirely
 
-**Why this split?** REST for correctness (initial data must be consistent), WebSocket for speed (real-time events need sub-100ms propagation), and direct socket targeting for notifications (only the recipient should receive them).
+**Why this split?** REST for correctness on initial data loads, WebSocket for speed on real-time events, and direct socket targeting so notifications only go to the recipient, not the whole board room.
 
 ---
 
@@ -122,11 +122,11 @@ await executeTransaction(async (client) => {
 Notifications are pushed directly to the recipient rather than broadcast to the board room. This required breaking a circular import (`server.ts` → `handlers.ts` → `notifications.ts` → `server.ts`) with a dependency injection pattern:
 
 ```typescript
-// notifications.ts — no direct import of io
+// notifications.ts: no direct import of io
 let _io: Server | null = null;
 export function setIo(io: Server) { _io = io; }
 
-// server.ts — injects io after creation
+// server.ts: injects io after creation
 setIo(io);
 
 // On invite: push board data directly to recipient's socket(s)
@@ -150,7 +150,7 @@ await redis.expire(`board:${boardId}:users`, 3600);
 A named handler pattern prevents listener accumulation across React re-renders and board navigations:
 
 ```typescript
-// All handlers stored by name — unbind removes only these, not all listeners
+// All handlers stored by name: unbind removes only these, not all listeners
 (socket as any)._boardHandlers = { onConnect, onCardCreated, onCardMoved, ... };
 
 // Clean unbind on board unmount
@@ -200,7 +200,7 @@ cd ../client && npm install
 ```bash
 cd server && cp .env.example .env
 # Fill in: DATABASE_URL, REDIS_URL, JWT_SECRET, CLIENT_URL
-# Optional: GOOGLE_CLIENT_ID (for Google OAuth — get from Google Cloud Console)
+# Optional: GOOGLE_CLIENT_ID (for Google OAuth: get from Google Cloud Console)
 
 cd ../client && cp .env.example .env
 # VITE_API_URL can be left empty for local dev (Vite proxy handles it)
@@ -214,7 +214,7 @@ cd ../client && cp .env.example .env
 docker run --name plama-postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=plama -p 5432:5432 -d postgres
 docker run --name plama-redis -p 6379:6379 -d redis
 
-# Option B: Neon + Upstash (free cloud tiers) — update .env with their connection strings
+# Option B: Neon + Upstash (free cloud tiers): update .env with their connection strings
 
 # Run migrations
 cd server && npm run db:migrate
@@ -248,13 +248,13 @@ Open [http://localhost:5173](http://localhost:5173)
 ### Backend → Northflank
 1. Create a free account at [northflank.com](https://northflank.com)
 2. Create a new project
-3. Add a PostgreSQL addon — copy the connection string
-4. Add a Redis addon — copy the connection string
+3. Add a PostgreSQL addon: copy the connection string
+4. Add a Redis addon: copy the connection string
 5. Create a combined service, connect your GitHub repo, set root to `server/`
 6. Build command: `npm install && npm run build && npm run db:migrate`
 7. Start command: `npm start`
 8. Add environment variables: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `CLIENT_URL`, `NODE_ENV=production`
-9. Deploy — Northflank containers stay running (no spin-down)
+9. Deploy: Northflank containers stay running (no spin-down)
 
 ### Frontend → Vercel
 ```bash
@@ -321,7 +321,7 @@ plama/
 
 ## Observability
 
-Full observability stack: **Prometheus** for metrics, **Grafana** for dashboards, **Pino** for structured logs — all tailored for real-time WebSocket workloads.
+Full observability stack: **Prometheus** for metrics, **Grafana** for dashboards, **Pino** for structured logs: all tailored for real-time WebSocket workloads.
 
 ### Metrics (Prometheus + Grafana)
 
@@ -330,7 +330,7 @@ The server exposes Prometheus-format metrics at `/metrics/prometheus`, covering:
 | Category | Metrics |
 |----------|---------|
 | HTTP | `http_requests_total`, `http_request_duration_seconds` (with method, route, status labels) |
-| WebSocket | `ws_connections_active`, `ws_events_total`, `ws_event_duration_seconds`, `ws_board_room_size` |
+| WebSocket | `ws_connections_active`, `ws_events_total`, `ws_event_duration_seconds`, `ws_broadcast_duration_seconds`, `ws_board_room_size` |
 | Database | `db_query_duration_seconds` (read/write/transaction with success/error/rollback status) |
 | App-specific | `plama_card_moves_total`, `plama_optimistic_rollbacks_total`, `plama_notifications_sent_total`, `plama_redis_presence_ops_total` |
 | Node.js | Default `prom-client` metrics (heap, GC, event loop lag) |
@@ -343,10 +343,13 @@ The existing JSON `/metrics` endpoint is preserved for backward compatibility.
 # WebSocket event throughput by type
 sum(rate(ws_events_total[5m])) by (event)
 
-# card-moved p95 latency
-histogram_quantile(0.95, rate(ws_event_duration_seconds_bucket{event="card-moved"}[5m]))
+# card-moved p95 DB latency
+histogram_quantile(0.95, sum(rate(ws_event_duration_seconds_bucket{event="card-moved"}[5m])) by (le))
 
-# Optimistic rollback rate — rising = something wrong
+# card-moved p95 broadcast latency (sub-1ms = changes reach all clients near-instantly)
+histogram_quantile(0.95, sum(rate(ws_broadcast_duration_seconds_bucket{event="card-moved"}[5m])) by (le))
+
+# Optimistic rollback rate: rising = something wrong
 sum(rate(plama_optimistic_rollbacks_total[5m])) by (event)
 
 # DB transaction rollback ratio
@@ -355,6 +358,38 @@ rate(db_query_duration_seconds_count{status="rollback"}[5m])
 
 # Node.js event loop lag
 nodejs_eventloop_lag_seconds
+
+# Top 10 endpoints by request volume
+topk(10, sum(rate(http_requests_total[5m])) by (route))
+```
+
+**Key Loki queries:**
+```logql
+# All production logs
+{service="plama"}
+| regexp `"message":"(?P<msg>[^"]+)`
+| regexp `statusCode\\":(?P<status>\d+)`
+| regexp `path\\":\\"(?P<path>[^\\]+)`
+| regexp `method\\":\\"(?P<method>[^\\]+)`
+| regexp `\\"msg\\":\\"(?P<message>[^\\]+)`
+| line_format "{{if .method}}{{.method}} {{.path}} → {{.status}} | {{end}}{{.message}}"
+
+# Error logs only
+{service="plama"}
+| regexp `"message":"(?P<msg>[^"]+)`
+| regexp `statusCode\\":(?P<status>\d+)`
+| status >= 400
+| regexp `path\\":\\"(?P<path>[^\\]+)`
+| regexp `\\"msg\\":\\"(?P<message>[^\\]+)`
+| line_format "{{.status}} | {{.path}} | {{.message}}"
+
+# Error rate by path
+sum by (path) (rate({service="plama"}
+| regexp `"message":"(?P<msg>[^"]+)`
+| regexp `statusCode\\":(?P<status>\d+)`
+| status >= 400
+| regexp `path\\":\\"(?P<path>[^\\]+)`
+[5m]))
 ```
 
 **Run the stack locally:**
@@ -366,7 +401,7 @@ cd server && npm run dev            # Start the server (port 3000)
 
 - Prometheus: [http://localhost:9090](http://localhost:9090)
 - Grafana: [http://localhost:3001](http://localhost:3001) (admin / admin)
-- Prometheus data source is auto-provisioned — start building dashboards immediately
+- Prometheus data source is auto-provisioned: start building dashboards immediately
 
 ### Structured Logging (Pino)
 
@@ -387,21 +422,21 @@ On every push to `main` and every PR:
 
 | Job | What it checks |
 |-----|----------------|
-| **Server — Build & Test** | TypeScript compile, DB migrations, Jest tests (with real Postgres + Redis service containers) |
-| **Client — Lint & Build** | ESLint, TypeScript compile, Vite production build |
+| **Server: Build & Test** | TypeScript compile, DB migrations, Jest tests (with real Postgres + Redis service containers) |
+| **Client: Lint & Build** | ESLint, TypeScript compile, Vite production build |
 
-CI jobs run in parallel. Deployments to Vercel and Northflank are gated — they only trigger on push to main after both jobs pass, with the backend deploying before the frontend to prevent API mismatches. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI jobs run in parallel. Deployments to Vercel and Northflank are gated: they only trigger on push to main after both jobs pass, with the backend deploying before the frontend to prevent API mismatches. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
 ## What I Learned
 
-- **WebSocket architecture** — Event-driven systems require different mental models than request/response. Designing clean event contracts and handling the full lifecycle (connect, reconnect, room rejoin, cleanup) is non-trivial.
-- **Optimistic updates** — The happy path is easy. The hard part is rollback: making sure failed server operations cleanly undo local state without jarring the user.
-- **Concurrency** — Silent data corruption is worse than visible errors. Wrapping multi-step position updates in a database transaction turned a potential source of subtle bugs into a clear commit-or-rollback guarantee.
-- **Circular dependencies** — Real-time systems that need to push events from utility code create circular import chains. Dependency injection (passing `io` in rather than importing it) is the clean solution.
-- **Listener lifecycle** — Naive WebSocket code accumulates duplicate event listeners on re-render. Named handler references and explicit unbinding on unmount are essential for correctness.
-- **Scale first in structure, not in code** — The codebase separates read/write DB pools, uses environment flags for Redis pub/sub and read replicas, and namespaces all socket rooms. None of that costs anything now, but it means scaling later doesn't require a rewrite.
+- **WebSocket architecture**: Event-driven systems require different mental models than request/response. Designing clean event contracts and handling the full lifecycle (connect, reconnect, room rejoin, cleanup) is non-trivial.
+- **Optimistic updates**: The happy path is easy. The hard part is rollback: making sure failed server operations cleanly undo local state without jarring the user.
+- **Concurrency**: Silent data corruption is worse than visible errors. Wrapping multi-step position updates in a database transaction turned a potential source of subtle bugs into a clear commit-or-rollback guarantee.
+- **Circular dependencies**: Real-time systems that need to push events from utility code create circular import chains. Dependency injection (passing `io` in rather than importing it) is the clean solution.
+- **Listener lifecycle**: Naive WebSocket code accumulates duplicate event listeners on re-render. Named handler references and explicit unbinding on unmount are essential for correctness.
+- **Scale first in structure, not in code**: The codebase separates read/write DB pools, uses environment flags for Redis pub/sub and read replicas, and namespaces all socket rooms. None of that costs anything now, but it means scaling later doesn't require a rewrite.
 
 ---
 
