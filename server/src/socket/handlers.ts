@@ -9,6 +9,7 @@ import {
   optimisticRollbacks,
   cardMovesTotal,
   redisPresenceOps,
+  wsBroadcastDuration,
 } from '../metrics';
 import {
   addUserToBoard,
@@ -323,7 +324,7 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       wsEventsTotal.inc({ event: 'card-moved' });
-      const endTimer = wsEventDuration.startTimer({ event: 'card-moved' });
+      const endDbTimer = wsEventDuration.startTimer({ event: 'card-moved' });
       try {
         // Get card title, assignees, and list names for activity + notifications
         const cardResult = await executeWrite(
@@ -393,12 +394,15 @@ export const setupSocketHandlers = (io: Server) => {
             newListTitle
           );
         }
+        endDbTimer();
 
         // Broadcast move to all other users
+        const endBroadcast = wsBroadcastDuration.startTimer({ event: 'card-moved' });
         socket.to(`board:${data.boardId}`).emit('card-moved', {
           ...data,
           movedBy: { id: socket.userId, name: socket.userName },
         });
+        endBroadcast(); // ← socket.emit is synchronous, so this is immediate
 
         cardMovesTotal.inc();
 
@@ -411,8 +415,6 @@ export const setupSocketHandlers = (io: Server) => {
           oldListId: data.oldListId,
           oldPosition: data.oldPosition,
         });
-      } finally {
-        endTimer();
       }
     });
 

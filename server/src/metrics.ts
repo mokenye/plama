@@ -59,6 +59,14 @@ export const wsEventDuration = new Histogram({
   registers: [register],
 });
 
+export const wsBroadcastDuration = new Histogram({
+  name: 'ws_broadcast_duration_seconds',
+  help: 'Time to broadcast a WebSocket event to a room',
+  labelNames: ['event'] as const,
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1], // tighter buckets since broadcast should be fast
+  registers: [register],
+});
+
 // ================================
 // Database Metrics
 // ================================
