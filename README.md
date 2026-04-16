@@ -35,22 +35,22 @@ Remote teams need lightweight, real-time collaboration without the complexity or
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       CLIENT (React SPA)                         │
-│   React + TypeScript + Zustand + @dnd-kit + Socket.io-client     │
+│                       CLIENT (React SPA)                        │
+│   React + TypeScript + Zustand + @dnd-kit + Socket.io-client    │
 └────────────────────────┬────────────────────────────────────────┘
                          │
             HTTP REST + WebSocket (Socket.io)
                          │
 ┌────────────────────────┴────────────────────────────────────────┐
-│                      SERVER (Node.js)                            │
-│          Express REST API + Socket.io Event Handlers             │
+│                      SERVER (Node.js)                           │
+│          Express REST API + Socket.io Event Handlers            │
 └──────────────┬──────────────────────────┬───────────────────────┘
                │                          │
         ┌──────┴──────┐          ┌────────┴────────┐
-        │ PostgreSQL  │          │     Redis        │
-        │  (Neon)     │          │   (Upstash)      │
-        │ Persistent  │          │ Presence/Cache   │
-        │   storage   │          │                  │
+        │ PostgreSQL  │          │     Redis       │
+        │  (Neon)     │          │   (Upstash)     │
+        │ Persistent  │          │ Presence/Cache  │
+        │   storage   │          │                 │
         └─────────────┘          └─────────────────┘
 ```
 
@@ -293,35 +293,58 @@ See [docs/scaling.md](docs/scaling.md) for bottleneck analysis and the path to 1
 
 ## Project Structure
 
+<details>
+<summary>View Project Structure</summary>
+
 ```
 plama/
 ├── client/
 │   └── src/
-│       ├── components/       # Board, List, Card, Notifications, UI
-│       ├── hooks/            # useBoard (real-time state + actions), useUndo
-│       ├── services/         # api.ts (REST), socket.ts (WebSocket + named handlers)
-│       ├── store/            # Zustand stores (auth, boards, active board)
-│       └── types/            # Shared TypeScript types
+│       ├── components/                 # Board, List, Card, Notifications, UI
+│       ├── hooks/                      # useBoard (real-time state + actions), useUndo
+│       ├── pages/                      # Board, Landing, Login and other route-level pages
+│       ├── services/                   # api.ts (REST), socket.ts (WebSocket + named handlers)
+│       ├── store/                      # Zustand stores (auth, boards, active board)
+│       ├── types/                      # Shared TypeScript types
+│       └── utils/                      # Client-side utility functions
 │
 ├── server/
-│   └── src/
-│       ├── routes/           # REST endpoints (auth, boards, lists, cards, notifications)
-│       ├── socket/           # WebSocket handlers (real-time core + concurrency logic)
-│       ├── db/               # PostgreSQL pools, executeTransaction, Redis client
-│       ├── middleware/       # JWT auth, HTTP metrics collection
-│       └── utils/            # Logger (Pino + request IDs), notifications, transforms
+│   ├── src/
+│   │   ├── routes/                     # REST endpoints (auth, boards, lists, cards, notifications)
+│   │   ├── socket/                     # WebSocket handlers (real-time core + concurrency logic)
+│   │   ├── db/                         # PostgreSQL pools, executeTransaction, Redis client
+│   │   ├── middleware/                 # JWT auth, HTTP metrics collection
+│   │   └── utils/                      # Logger (Pino + request IDs), notifications, transforms
+│   ├── migrations/                     # Database migration scripts
+│   ├── scripts/seed-demo.ts            # Seeds data for Artillery load testing
+│   └── tests/                          # Jest test suites
 │
-├── .github/workflows/ci.yml  # GitHub Actions CI (build, lint, test, deploy)
-├── docker-compose.yml         # Postgres + Redis + Prometheus + Grafana
-├── prometheus.yml             # Prometheus scrape config
-└── grafana/provisioning/      # Auto-configured Prometheus data source
+├── .github/workflows/ci.yml            # GitHub Actions CI (build, lint, test, deploy)
+├── docs/                               # Architecture deep dive, scaling analysis
+├── grafana/provisioning/datasources/   # Auto-configured Prometheus data source
+├── artillery-test.yml                  # Load test scenarios
+├── artillery-local-bypass.yml          # Local load test config
+├── docker-compose.yml                  # Postgres + Redis + Prometheus + Grafana
+└── prometheus.yml                      # Prometheus scrape config
+
 ```
+
+</details>
 
 ---
 
 ## Observability
 
 Full observability stack: **Prometheus** for metrics, **Grafana** for dashboards, **Pino** for structured logs: all tailored for real-time WebSocket workloads.
+
+[View Dashboard Snapshot ↗](https://plama.grafana.net/dashboard/snapshot/vv4HHnemrnwb8qpCvikdTOY85gSCr2Uq)&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;[View Live System Metrics ↗](https://plama.grafana.net/public-dashboards/072d7ed0f1db4184aba3279c175ca34a)
+
+<details>
+<summary>Dashboard Preview</summary>
+
+![Grafana Dashboard](./client/public/grafana-snapshot.png)
+
+</details>
 
 ### Metrics (Prometheus + Grafana)
 
@@ -336,6 +359,9 @@ The server exposes Prometheus-format metrics at `/metrics/prometheus`, covering:
 | Node.js | Default `prom-client` metrics (heap, GC, event loop lag) |
 
 The existing JSON `/metrics` endpoint is preserved for backward compatibility.
+
+<details>
+<summary><h3 style="display:inline">Grafana & Loki Query Reference</h3></summary>
 
 **Key Grafana queries:**
 
@@ -391,6 +417,9 @@ sum by (path) (rate({service="plama"}
 | regexp `path\\":\\"(?P<path>[^\\]+)`
 [5m]))
 ```
+
+</details>
+&nbsp;
 
 **Run the stack locally:**
 
