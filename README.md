@@ -361,7 +361,7 @@ The server exposes Prometheus-format metrics at `/metrics/prometheus`, covering:
 The existing JSON `/metrics` endpoint is preserved for backward compatibility.
 
 <details>
-<summary><h3 style="display:inline">Grafana & Loki Query Reference</h3></summary>
+<summary>Grafana & Loki Query Reference</summary>
 
 **Key Grafana queries:**
 
@@ -419,7 +419,6 @@ sum by (path) (rate({service="plama"}
 ```
 
 </details>
-&nbsp;
 
 **Run the stack locally:**
 
