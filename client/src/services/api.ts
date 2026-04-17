@@ -91,10 +91,10 @@ export const boardsApi = {
 // Lists
 // ================================
 export const listsApi = {
-  create: async (boardId: number, data: { title: string }) => {
-    const res = await api.post<{ list: List }>(`/boards/${boardId}/lists`, data);
-    return res.data;
-  },
+  // create: async (boardId: number, data: { title: string }) => {
+  //   const res = await api.post<{ list: List }>(`/boards/${boardId}/lists`, data);
+  //   return res.data;
+  // },
 
   update: async (boardId: number, listId: number, data: { title: string }) => {
     const res = await api.patch<{ list: List }>(`/boards/${boardId}/lists/${listId}`, data);

@@ -9,6 +9,7 @@ import type {
   SocketUserJoined,
   SocketUserLeft,
   SocketError,
+  List,
 } from '../types';
 
 // ================================
@@ -100,6 +101,9 @@ export const emitCardMoved = (data: {
 export const emitCardDeleted = (data: { cardId: number; listId: number; boardId: number }) =>
   getSocket().emit('card-deleted', data);
 
+export const emitListCreated = (data: { boardId: number; title: string }) =>
+  getSocket().emit('list-created', data);
+
 export const emitListDeleted = (data: { listId: number; boardId: number }) =>
   getSocket().emit('list-deleted', data);
 
@@ -154,6 +158,10 @@ export const bindBoardEvents = (boardId: number) => {
   };
 
   const onCardDeleted   = ({ cardId }: SocketCardDeleted) => store().removeCard(cardId);
+  const onListCreated   = ({ list }: { list: List }) => {
+    console.log('[Socket] list-created received', list);
+    store().addList(list);
+  };
   const onListDeleted   = ({ listId }: { listId: number }) => store().removeList(listId);
 
   const onCardsReordered = ({ listId, cardIds }: { listId: number; cardIds: number[] }) =>
@@ -184,6 +192,7 @@ export const bindBoardEvents = (boardId: number) => {
   s.on('card-moved',       onCardMoved);
   s.on('card-deleted',     onCardDeleted);
   s.on('list-deleted',     onListDeleted);
+  s.on('list-created',     onListCreated);
   s.on('cards-reordered',  onCardsReordered);
   s.on('list-moved',       onListMoved);
   s.on('card-error',       onCardError);
@@ -197,7 +206,7 @@ export const bindBoardEvents = (boardId: number) => {
   // Store named handlers so unbind can remove only ours
   (s as any)._boardHandlers = {
     onConnect, onDisconnect, onReconnecting,
-    onCardCreated, onCardUpdated, onCardMoved, onCardDeleted, onListDeleted,
+    onCardCreated, onCardUpdated, onCardMoved, onCardDeleted, onListCreated, onListDeleted,
     onCardsReordered, onListMoved,
     onCardError, onCardMoveFailed,
     onActiveUsers, onUserJoined, onUserLeft, onUserAway, onUserActive,
@@ -214,6 +223,7 @@ function unbindBoardEventsInternal(s: Socket) {
   s.off('card-updated',     h.onCardUpdated);
   s.off('card-moved',       h.onCardMoved);
   s.off('card-deleted',     h.onCardDeleted);
+  s.off('list-created',     h.onListCreated);
   s.off('list-deleted',     h.onListDeleted);
   s.off('cards-reordered',  h.onCardsReordered);
   s.off('list-moved',       h.onListMoved);

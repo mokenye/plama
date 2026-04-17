@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { transformCard } from '../utils/transform';
+import { transformCard, transformList } from '../utils/transform';
 import { logActivity } from '../utils/activityLogger';
 import {
   wsEventsTotal,
@@ -464,6 +464,56 @@ export const setupSocketHandlers = (io: Server) => {
         endTimer();
       }
     });
+
+    // List Created
+    // --------------------------------
+    socket.on('list-created', async (data: {
+      boardId: number;
+      title: string;
+    }) => {
+      try {
+        // Get max position in board
+        const posResult = await executeWrite(
+          'SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM lists WHERE board_id = $1',
+          [data.boardId]
+        );
+        const position = posResult.rows[0].next_pos;
+
+        const result = await executeWrite(
+          `INSERT INTO lists (board_id, title, position) VALUES ($1, $2, $3) RETURNING *`,
+          [data.boardId, data.title, position]
+        );
+
+        const list = transformList(result.rows[0]);
+
+        // Log activity
+        await logActivity({
+          boardId: data.boardId,
+          userId: socket.userId!,
+          userName: socket.userName!,
+          action: 'list_created',
+          entityType: 'list',
+          entityId: list.id,
+          entityName: list.title,
+        });
+
+        logger.info({ boardId: data.boardId, list }, 'Broadcasting list-created');
+        io.to(`board:${data.boardId}`).emit('list-created', {
+          list,
+          createdBy: { id: socket.userId, name: socket.userName },
+        });
+
+      } catch (error) {
+        logger.error({ error, data }, 'Failed to create list');
+        socket.emit('list-error', {
+          type: 'list-created',
+          message: 'Failed to create list',
+        });
+      }
+    });
+
+    // List Deleted
+    // --------------------------------
 
     socket.on('list-deleted', async (data: {
       listId: number;

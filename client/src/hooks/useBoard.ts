@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { boardsApi, listsApi, cardsApi } from '../services/api';
+import { boardsApi, cardsApi } from '../services/api';
 import {
   initSocket,
   joinBoard,
@@ -10,9 +10,10 @@ import {
   emitCardUpdated,
   emitCardMoved,
   emitCardDeleted,
+  emitListCreated,
+  emitListMoved,
   emitListDeleted,
   emitCardsReordered,
-  emitListMoved,
   emitUserAway,
   emitUserActive,
   isSocketInitialized,
@@ -178,6 +179,16 @@ export const useBoard = (boardId: number) => {
     [board]
   );
 
+   const reorderCards = useCallback(
+    (listId: number, cardIds: number[]) => {
+      if (!board) return;
+      useBoardStore.getState().reorderCards(listId, cardIds);
+      cardsApi.reorder(board.id, listId, cardIds).catch((err) => console.error('[useBoard] Reorder error:', err));
+      emitCardsReordered({ listId, cardIds, boardId: board.id });
+    },
+    [board]
+  );
+
   const deleteCard = useCallback(
     (cardId: number, listId: number) => {
       if (!board) return;
@@ -188,29 +199,12 @@ export const useBoard = (boardId: number) => {
   );
 
   // --------------------------------
-  // List Actions (REST, not WebSocket)
+  // List Actions (REST, use WebSocket for create)
   // --------------------------------
   const createList = useCallback(
-    async (title: string) => {
+    (title: string) => {
       if (!board) return;
-      try {
-        const { list } = await listsApi.create(board.id, { title });
-        useBoardStore.getState().addList(list);
-      } catch (err: any) {
-        console.error('[useBoard] Create list error:', err);
-        const errorMsg = err.response?.data?.error || err.message || 'Failed to create list';
-        alert(errorMsg);
-      }
-    },
-    [board]
-  );
-
-  const reorderCards = useCallback(
-    (listId: number, cardIds: number[]) => {
-      if (!board) return;
-      useBoardStore.getState().reorderCards(listId, cardIds);
-      cardsApi.reorder(board.id, listId, cardIds).catch((err) => console.error('[useBoard] Reorder error:', err));
-      emitCardsReordered({ listId, cardIds, boardId: board.id });
+      emitListCreated({ boardId: board.id, title });
     },
     [board]
   );
