@@ -26,7 +26,9 @@ Remote teams need lightweight, real-time collaboration without the complexity or
 - **Undo**: Destructive actions (delete card, delete list, delete board) have a 5-second cancellation window before committing
 - **Conflict resolution**: Concurrent card moves are wrapped in database transactions; failed operations roll back gracefully on all clients
 - **Auth**: JWT-based authentication with Google OAuth and email/password; protected routes and role-aware UI (owners vs. members)
-- **Dark mode**: Persistent preference, toggle from any screen
+- **Guest mode**: Try Plama with no signup
+- **Shareable invite links**: Generate a link from any board that lets someone join instantly as a guest or by signing in, without needing to know their email up front
+- **Dark mode**: Light by default, with a toggle that remembers your choice on that browser
 - **Graceful degradation**: Connection loss banner, automatic reconnection, board rejoin on reconnect
 
 ---
@@ -157,6 +159,27 @@ A named handler pattern prevents listener accumulation across React re-renders a
 s.off('card-created', h.onCardCreated);
 s.off('card-moved',   h.onCardMoved);
 // ...
+```
+
+### Access Control on WebSocket Events
+
+Authenticating a socket connection doesn't automatically authorize an action. We check board membership for every single event (like moving cards, updating lists, or moving cursors) before broadcasting or saving to the database. Even if someone manages to guess a valid board ID, they can't read or change anything unless they are explicitly added to that board.
+
+```typescript
+const isBoardMember = async (boardId: number, userId?: number) => {
+  const result = await executeRead(
+    'SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2',
+    [boardId, userId]
+  );
+  return result.rows.length > 0;
+};
+
+socket.on('card-moved', async (data) => {
+  if (!(await isBoardMember(data.boardId, socket.userId))) {
+    return socket.emit('card-move-failed', { ...data });
+  }
+  // ...proceed with the move
+});
 ```
 
 ---
@@ -464,6 +487,7 @@ CI jobs run in parallel. Deployments to Vercel and Northflank are gated: they on
 - **Concurrency**: Silent data corruption is worse than visible errors. Wrapping multi-step position updates in a database transaction turned a potential source of subtle bugs into a clear commit-or-rollback guarantee.
 - **Circular dependencies**: Real-time systems that need to push events from utility code create circular import chains. Dependency injection (passing `io` in rather than importing it) is the clean solution.
 - **Listener lifecycle**: Naive WebSocket code accumulates duplicate event listeners on re-render. Named handler references and explicit unbinding on unmount are essential for correctness.
+- **Authentication vs. authorization**: A valid JWT verifies a user's identity but does not grant board access. Every board-scoped WebSocket event requires an independent membership check to prevent users from interacting with unassigned boards by modifying target IDs.
 - **Scale first in structure, not in code**: The codebase separates read/write DB pools, uses environment flags for Redis pub/sub and read replicas, and namespaces all socket rooms. None of that costs anything now, but it means scaling later doesn't require a rewrite.
 
 ---
