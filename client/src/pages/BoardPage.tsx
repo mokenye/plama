@@ -1,10 +1,11 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { useBoard } from '../hooks/useBoard'
 import { useAuthStore } from '../store'
 import BoardView from '../components/Board/BoardView'
 import InviteMember from '../components/Board/InviteMember'
 import BoardSettings from '../components/Board/BoardSettings'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useUndo } from '../hooks/useUndo'
 import UndoToast from '../components/UI/UndoToast'
 import ActivityLog from '../components/Activity/ActivityLog'
@@ -16,6 +17,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import ShortcutsHelp from '../components/Shortcuts/ShortcutsHelp'
 import { initSocket, getSocket } from '../services/socket'
 import { disconnectSocket } from '../services/socket'
+import { GuestBanner } from '../components/Auth/GuestNotice'
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
@@ -34,17 +36,46 @@ export default function BoardPage() {
   const [boardColor, setBoardColor] = useState('')
   const [showActivityLog, setShowActivityLog] = useState(false)
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const moreMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+  const [moreMenuPos, setMoreMenuPos] = useState({ top: 0, left: 0 })
+
+  useEffect(() => {
+    if (showMoreMenu && moreMenuButtonRef.current) {
+      const rect = moreMenuButtonRef.current.getBoundingClientRect()
+      const WIDTH = 176
+      const MARGIN = 8
+      const idealLeft = rect.right + window.scrollX - WIDTH
+      setMoreMenuPos({
+        top: rect.bottom + window.scrollY + 6,
+        left: Math.max(MARGIN, Math.min(idealLeft, window.innerWidth - WIDTH - MARGIN)),
+      })
+    }
+  }, [showMoreMenu])
+
+  useEffect(() => {
+    if (!showMoreMenu) return
+    const onClickOutside = (e: MouseEvent) => {
+      if (
+        moreMenuButtonRef.current && !moreMenuButtonRef.current.contains(e.target as Node) &&
+        moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)
+      ) setShowMoreMenu(false)
+    }
+    window.addEventListener('mousedown', onClickOutside)
+    return () => window.removeEventListener('mousedown', onClickOutside)
+  }, [showMoreMenu])
 
   const {
     board, lists, cards, members, activeUsers,
-    isLoading, error, connectionStatus, userRole,
+    isLoading, error, userRole,
     createCard, updateCard, moveCard, deleteCard,
-    createList, deleteList, getCardsForList,
+    createList, deleteList,
     reorderCards, moveList, addMember, removeMember,
   } = useBoard(parseInt(boardId || '0'))
 
   const {
-    searchTerm, setSearchTerm, filters, setFilters,
+    setSearchTerm, filters, setFilters,
     filteredCards, hasActiveFilters,
   } = useCardFilters(cards)
 
@@ -76,6 +107,7 @@ export default function BoardPage() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
+    localStorage.setItem('darkMode', String(darkMode))
   }, [darkMode])
 
   useEffect(() => {
@@ -135,7 +167,7 @@ export default function BoardPage() {
     },
   ], !isLoading)
 
-  const handleLogout = () => { disconnectSocket(); clearAuth(); navigate('/login') }
+  const handleLogout = () => { disconnectSocket(); clearAuth(); navigate('/') }
 
   if (isLoading) {
     return (
@@ -273,42 +305,60 @@ export default function BoardPage() {
               <NotificationBell />
             </div>
 
-            {/* Dark mode */}
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-              title="Toggle dark mode"
-            >
-              {darkMode ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            {/* Invite */}
+            <InviteMember boardId={board.id} onMemberAdded={(member) => addMember({ ...member, role: member.role as 'owner' | 'member' })} />
+
+            {/* More menu: dark mode + activity log tucked away to reduce clutter */}
+            <div className="relative">
+              <button
+                ref={moreMenuButtonRef}
+                onClick={() => setShowMoreMenu((o) => !o)}
+                aria-expanded={showMoreMenu}
+                title="More"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
                 </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
+              </button>
+              {showMoreMenu && createPortal(
+                <div
+                  ref={moreMenuRef}
+                  style={{ position: 'absolute', top: moreMenuPos.top, left: moreMenuPos.left, width: 176, zIndex: 9999 }}
+                  className="rounded-xl border border-white/10 bg-[#181a24] shadow-2xl p-1.5"
+                >
+                  <button
+                    onClick={() => { setDarkMode(!darkMode); setShowMoreMenu(false) }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/[0.08] hover:text-white transition"
+                  >
+                    {darkMode ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                      </svg>
+                    )}
+                    {darkMode ? 'Light mode' : 'Dark mode'}
+                  </button>
+                  <button
+                    onClick={() => { setShowActivityLog(true); setShowMoreMenu(false) }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/[0.08] hover:text-white transition"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    Activity log
+                  </button>
+                </div>,
+                document.body
               )}
-            </button>
-
-            {/* Invite — sm+ only */}
-            <div className="hidden sm:block">
-              <InviteMember boardId={board.id} onMemberAdded={(member) => addMember({ ...member, role: member.role as 'owner' | 'member' })} />
             </div>
-
-            {/* Activity log — md+ only */}
-            <button
-              onClick={() => setShowActivityLog(true)}
-              className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              title="Activity log"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-              </svg>
-            </button>
 
             {/* Settings */}
             <button
@@ -326,7 +376,9 @@ export default function BoardPage() {
             <div className="hidden sm:block w-px h-4 bg-white/20 mx-1" />
 
             {/* Username + Sign out — rightmost, hidden on mobile */}
-            <span className="hidden lg:inline text-xs text-white/50 max-w-[100px] truncate">{user?.name}</span>
+            <span className="hidden lg:inline text-xs text-white/50 max-w-[100px] truncate">
+              {user?.isGuest ? 'Guest' : user?.name}
+            </span>
             <button
               onClick={handleLogout}
               className="hidden sm:block px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-md text-xs font-medium transition-colors"
@@ -347,6 +399,7 @@ export default function BoardPage() {
           />
         </div>
       </header>
+      <GuestBanner />
 
       {/* Board content — fills remaining height, BoardView handles its own scroll */}
       <div className="flex-1 overflow-hidden min-h-0">
