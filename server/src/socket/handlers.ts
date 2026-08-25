@@ -16,7 +16,7 @@ import {
   removeUserFromBoard,
   getActiveUsers,
 } from '../db/redis';
-import { executeWrite, executeTransaction } from '../db/connection';
+import { executeRead, executeWrite, executeTransaction } from '../db/connection';
 import { verifyToken } from '../utils/jwt';
 import { notifyCardAssignment, notifyCardComment, notifyCardMoved, registerUserSocket, unregisterUserSocket } from '../utils/notifications';
 import { Client } from 'pg';
@@ -31,6 +31,17 @@ interface AuthenticatedSocket extends Socket {
 
 // Track which boards each socket is in (for cleanup on disconnect)
 const socketBoards = new Map<string, Set<number>>();
+
+// Guards every board-scoped event. Without this, any authenticated socket
+// (including a guest) could read or mutate a board it was never added to.
+const isBoardMember = async (boardId: number, userId?: number): Promise<boolean> => {
+  if (!userId || !Number.isInteger(boardId)) return false;
+  const result = await executeRead(
+    'SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2',
+    [boardId, userId]
+  );
+  return result.rows.length > 0;
+};
 
 // In-memory presence fallback (when Redis isn't available)
 const inMemoryPresence = new Map<number, Map<number, { id: number; name: string; joinedAt: number }>>();
@@ -115,6 +126,11 @@ export const setupSocketHandlers = (io: Server) => {
     // --------------------------------
     socket.on('join-board', async ({ boardId }: { boardId: number }) => {
       wsEventsTotal.inc({ event: 'join-board' });
+
+      if (!(await isBoardMember(boardId, socket.userId))) {
+        return socket.emit('board-error', { boardId, message: 'Access denied' });
+      }
+
       socket.join(`board:${boardId}`);
       socketBoards.get(socket.id)?.add(boardId);
 
@@ -163,6 +179,11 @@ export const setupSocketHandlers = (io: Server) => {
       wsEventsTotal.inc({ event: 'card-created' });
       const endTimer = wsEventDuration.startTimer({ event: 'card-created' });
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) {
+          endTimer();
+          return socket.emit('card-error', { type: 'card-created', tempId: data.tempId, message: 'Access denied' });
+        }
+
         // Get max position in list
         const posResult = await executeWrite(
           'SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM cards WHERE list_id = $1',
@@ -226,6 +247,11 @@ export const setupSocketHandlers = (io: Server) => {
       wsEventsTotal.inc({ event: 'card-updated' });
       const endTimer = wsEventDuration.startTimer({ event: 'card-updated' });
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) {
+          endTimer();
+          return socket.emit('card-error', { type: 'card-updated', cardId: data.cardId, message: 'Access denied' });
+        }
+
         // Fetch old assignees BEFORE the update so we can diff them
         const oldCardResult = await executeWrite(
           'SELECT assignees FROM cards WHERE id = $1',
@@ -326,6 +352,15 @@ export const setupSocketHandlers = (io: Server) => {
       wsEventsTotal.inc({ event: 'card-moved' });
       const endDbTimer = wsEventDuration.startTimer({ event: 'card-moved' });
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) {
+          endDbTimer();
+          return socket.emit('card-move-failed', {
+            cardId: data.cardId,
+            oldListId: data.oldListId,
+            oldPosition: data.oldPosition,
+          });
+        }
+
         // Get card title, assignees, and list names for activity + notifications
         const cardResult = await executeWrite(
           'SELECT title, assignees FROM cards WHERE id = $1',
@@ -426,6 +461,11 @@ export const setupSocketHandlers = (io: Server) => {
       wsEventsTotal.inc({ event: 'card-deleted' });
       const endTimer = wsEventDuration.startTimer({ event: 'card-deleted' });
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) {
+          endTimer();
+          return socket.emit('card-error', { type: 'card-deleted', cardId: data.cardId, message: 'Access denied' });
+        }
+
         // Get card title before deleting
         const cardResult = await executeWrite(
           'SELECT title FROM cards WHERE id = $1',
@@ -472,6 +512,10 @@ export const setupSocketHandlers = (io: Server) => {
       title: string;
     }) => {
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) {
+          return socket.emit('list-error', { type: 'list-created', message: 'Access denied' });
+        }
+
         // Get max position in board
         const posResult = await executeWrite(
           'SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM lists WHERE board_id = $1',
@@ -520,6 +564,10 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) {
+          return socket.emit('list-error', { type: 'list-deleted', listId: data.listId, message: 'Access denied' });
+        }
+
         // Delete all cards in the list first (CASCADE should handle this, but being explicit)
         await executeWrite('DELETE FROM cards WHERE list_id = $1', [data.listId]);
         
@@ -567,6 +615,8 @@ export const setupSocketHandlers = (io: Server) => {
       boardId: number;
     }) => {
       try {
+        if (!(await isBoardMember(data.boardId, socket.userId))) return;
+
         // Update positions for each card in the new order
         for (let i = 0; i < data.cardIds.length; i++) {
           await executeWrite(
@@ -595,6 +645,8 @@ export const setupSocketHandlers = (io: Server) => {
     }) => {
       try {
         const { listId, boardId, newPosition, oldPosition } = data;
+
+        if (!(await isBoardMember(boardId, socket.userId))) return;
 
         // Shift other lists to make room
         if (newPosition > oldPosition) {
@@ -634,7 +686,8 @@ export const setupSocketHandlers = (io: Server) => {
     // Cursor Tracking (optional feature)
     // --------------------------------
     if (process.env.ENABLE_CURSORS === 'true') {
-      socket.on('cursor-move', (data: { boardId: number; x: number; y: number }) => {
+      socket.on('cursor-move', async (data: { boardId: number; x: number; y: number }) => {
+        if (!(await isBoardMember(data.boardId, socket.userId))) return;
         socket.to(`board:${data.boardId}`).emit('cursor-update', {
           userId: socket.userId,
           userName: socket.userName,
