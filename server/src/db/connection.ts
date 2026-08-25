@@ -115,6 +115,16 @@ export const testDatabaseConnection = async () => {
   }
 };
 
+export const ensureSchemaExtensions = async () => {
+  try {
+    await writePool.query(
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS is_guest BOOLEAN NOT NULL DEFAULT FALSE'
+    );
+  } catch (error) {
+    logger.warn('Could not ensure is_guest column:', error);
+  }
+};
+
 // ================================
 // Schema (Run once to set up DB)
 // ================================
@@ -127,6 +137,7 @@ export const schema = `
     avatar_url VARCHAR(500),
     google_id VARCHAR(255) UNIQUE,         
     auth_provider VARCHAR(20) DEFAULT 'local', 
+    is_guest BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   );
@@ -178,4 +189,6 @@ export const schema = `
   CREATE INDEX IF NOT EXISTS idx_lists_position ON lists(board_id, position);
   CREATE INDEX IF NOT EXISTS idx_cards_list ON cards(list_id);
   CREATE INDEX IF NOT EXISTS idx_cards_position ON cards(list_id, position);
+
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS is_guest BOOLEAN NOT NULL DEFAULT FALSE;
 `;

@@ -11,7 +11,7 @@ import { metricsMiddleware, metrics } from './middleware/metrics';
 import { register, wsConnectionsActive } from './metrics';
 import { setupSocketHandlers } from './socket/handlers';
 import { setIo } from './utils/notifications';
-import { testDatabaseConnection } from './db/connection';
+import { testDatabaseConnection, ensureSchemaExtensions } from './db/connection';
 import { connectRedis } from './db/redis';
 
 // Routes
@@ -93,7 +93,14 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again after 15 minutes' },
 });
 
+const guestLimiter = rateLimit({
+  windowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '900000'),
+  max: parseInt(process.env.GUEST_RATE_LIMIT_MAX_REQUESTS || '20'),
+  message: { error: 'Too many guest sessions, please try again later' },
+});
+
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/guest', guestLimiter);
 app.use('/api/', limiter);
 
 // Grafana Cloud metrics endpoint probe — must return 401 on first unauthenticated request
@@ -208,6 +215,7 @@ const PORT = parseInt(process.env.PORT || '3000');
 const start = async () => {
   // Test database connection before starting
   await testDatabaseConnection();
+  await ensureSchemaExtensions();
 
   // Connect to Redis
   await connectRedis();

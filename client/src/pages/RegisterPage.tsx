@@ -1,12 +1,15 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { authApi } from '../services/api'
 import { useAuthStore } from '../store'
 import GoogleSignInButton from '../components/Auth/GoogleSignInButton'
+import ContinueAsGuest from '../components/Auth/ContinueAsGuest'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const setAuth = useAuthStore((state) => state.setAuth)
+  const isGuest = useAuthStore((state) => state.user?.isGuest)
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -26,7 +29,7 @@ export default function RegisterPage() {
     try {
       const { user, token } = await authApi.register({ name, email, password })
       setAuth(user, token)
-      navigate('/')
+      navigate((location.state as { from?: string })?.from || '/')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.')
     } finally {
@@ -59,7 +62,9 @@ export default function RegisterPage() {
           <div className="mb-7">
             <h1 className="text-xl font-black tracking-tight text-white/90 mb-1"
               style={{ fontFamily: 'Georgia, serif' }}>Create account</h1>
-            <p className="text-sm text-white/30">Get started for free</p>
+            <p className="text-sm text-white/30">
+              {isGuest ? 'Keep this workspace by creating an account' : 'Get started for free'}
+            </p>
           </div>
 
           {error && (
@@ -135,6 +140,8 @@ export default function RegisterPage() {
           <Link to="/login" className="text-indigo-400/80 hover:text-indigo-300 transition">
             Sign in
           </Link>
+          <span className="mx-2 text-white/15">·</span>
+          <ContinueAsGuest variant="text" className="inline" />
         </p>
       </div>
     </div>

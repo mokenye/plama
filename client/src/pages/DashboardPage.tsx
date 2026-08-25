@@ -8,6 +8,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import ShortcutsHelp from '../components/Shortcuts/ShortcutsHelp'
 import { initSocket, getSocket } from '../services/socket'
 import { disconnectSocket } from '../services/socket'
+import { GuestBanner } from '../components/Auth/GuestNotice'
 
 const PlamaLogo = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className="w-8 h-8 flex-shrink-0">
@@ -142,7 +143,7 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLogout = () => { disconnectSocket(); clearAuth(); navigate('/login') }
+  const handleLogout = () => { disconnectSocket(); clearAuth(); navigate('/') }
 
   if (isLoading) {
     return (
@@ -199,7 +200,9 @@ export default function DashboardPage() {
               <NotificationBell />
             </div>
             <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-            <span className="hidden sm:block text-sm text-gray-600 dark:text-gray-400 max-w-[140px] truncate px-1">{user?.name}</span>
+            <span className="hidden sm:block text-sm text-gray-600 dark:text-gray-400 max-w-[140px] truncate px-1">
+              {user?.isGuest ? 'Guest' : user?.name}
+            </span>
             <button onClick={handleLogout}
               className="ml-1 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors">
               Sign out
@@ -207,6 +210,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+      <GuestBanner />
 
       {/* Main */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">

@@ -1,11 +1,13 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { authApi } from '../services/api'
 import { useAuthStore } from '../store'
 import GoogleSignInButton from '../components/Auth/GoogleSignInButton'
+import ContinueAsGuest from '../components/Auth/ContinueAsGuest'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const setAuth = useAuthStore((state) => state.setAuth)
 
   const [email, setEmail] = useState('')
@@ -21,7 +23,7 @@ export default function LoginPage() {
     try {
       const { user, token } = await authApi.login({ email, password })
       setAuth(user, token)
-      navigate('/')
+      navigate((location.state as { from?: string })?.from || '/')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed. Please try again.')
     } finally {
@@ -111,6 +113,8 @@ export default function LoginPage() {
           <Link to="/register" className="text-indigo-400/80 hover:text-indigo-300 transition">
             Create one free
           </Link>
+          <span className="mx-2 text-white/15">·</span>
+          <ContinueAsGuest variant="text" className="inline" />
         </p>
       </div>
     </div>

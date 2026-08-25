@@ -8,6 +8,7 @@ export interface User {
   email: string;
   avatarUrl?: string;
   createdAt?: string;
+  isGuest?: boolean;
 }
 
 export interface Board {
@@ -62,6 +63,7 @@ export interface BoardMember {
   email: string;
   avatarUrl?: string;
   role: 'owner' | 'member';
+  isGuest?: boolean;
 }
 
 // ================================
