@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import ContinueAsGuest from '../components/Auth/ContinueAsGuest'
 
 const IconZap = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -33,18 +34,88 @@ const IconMoon = () => (
 )
 
 const FEATURES = [
-  { Icon: IconZap,    title: 'Real-time collaboration', desc: 'See teammates move cards, add comments, and make changes — live, without refreshing.' },
-  { Icon: IconLayout, title: 'Visual project boards',   desc: 'Drag-and-drop Kanban boards that adapt to your workflow, not the other way around.' },
-  { Icon: IconFilter, title: 'Smart filtering',         desc: 'Filter by assignee, label, or due date across every board instantly.' },
-  { Icon: IconClock,  title: 'Activity history',        desc: 'Full audit trail of every change — who did what, and when.' },
-  { Icon: IconBell,   title: 'Notifications',           desc: "Get notified when you're assigned, mentioned, or when deadlines approach." },
-  { Icon: IconMoon,   title: 'Dark mode',               desc: 'Works beautifully in light and dark — your eyes, your choice.' },
+  { Icon: IconZap,    title: 'Live sync',       desc: 'See teammates move cards, add comments, and make changes in real-time. No refresh, no polling.' },
+  { Icon: IconLayout, title: 'Drag-and-drop boards', desc: 'Lists and cards you reorder by dragging, built on dnd-kit for smooth, accessible sorting.' },
+  { Icon: IconFilter, title: 'Smart filtering', desc: 'Filter by assignee, label or due date across every board instantly.' },
+  { Icon: IconClock,  title: 'Activity log',         desc: 'Every move, edit, and comment is timestamped and attributed, so you can see what changed.' },
+  { Icon: IconBell,   title: 'Notifications',        desc: 'Get pinged when you are assigned a card or added to a board.' },
+  { Icon: IconMoon,   title: 'Dark mode',            desc: 'Light by default, with a dark mode toggle that remembers your choice on that browser.' },
 ]
 
 const MOCK_CARDS = {
   todo:       ['Define project scope', 'Stakeholder interviews', 'Research competitors'],
   inProgress: ['Design system setup', 'API architecture'],
   done:       ['Project kickoff', 'Team onboarding', 'Repo setup'],
+}
+
+const FAQS = [
+  {
+    q: 'How does the real-time Kanban board work?',
+    a: 'Every board is synced over a live WebSocket connection. When someone creates, moves, or updates a card, that change is written once on the server and broadcast to everyone currently viewing the same board, with no refresh required. Presence dots show who is on the board with you.',
+  },
+  {
+    q: 'How can I see real-time updates live?',
+    a: 'Open the same Plama board in two windows side by side. The second window just needs to be a separate session, like a private/incognito window or a completely different browser. Just copy your board\'s invite link, paste it into the second window to join, and drag a card around to watch the changes update instantly across both screens.',
+  },
+  {
+    q: 'What is guest mode?',
+    a: 'Guest mode lets you try Plama without creating an account. Your work is saved locally in this browser session. Signing out, clearing browser data, or switching devices will erase it.\n\nNote: Guest sessions are also a little less seamless in real time (e.g. a returning guest may show up as a new name). Sign in for the smoothest experience and to save future work.',
+  },
+  {
+    q: 'Can two guests collaborate on the same board?',
+    a: 'Yes. From a board, click "Copy invite link" and open it in a second window or send it to someone else. Anyone who opens the link can join as a guest or by signing in.',
+  },
+  {
+    q: 'Can teammates join a board I am on?',
+    a: 'Yes, two ways: add them by email or copy the shareable invite link. Once access is granted, you\'ll both see the same board, with moves, comments, and assignments syncing in real time.\n\nNote: Adding an email grants account access directly (or when they sign up), but does not send an automated email.',
+  },
+]
+
+function FaqSection() {
+  const [open, setOpen] = useState<number | null>(null)
+
+  return (
+    <section id="faq" className="relative z-10 px-6 sm:px-14 pb-28 max-w-7xl mx-auto scroll-mt-8">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-12">
+        <div className="sm:max-w-xs">
+          <p className="text-xs font-medium text-white/25 tracking-[0.15em] uppercase mb-3">FAQ</p>
+          <div className="w-8 h-px bg-indigo-500/50" />
+        </div>
+          <h2 className="text-3xl sm:text-[38px] font-bold tracking-tight leading-[1.1] sm:text-right">
+          Common<br />
+          <span className="text-white/25">questions.</span>
+        </h2>
+      </div>
+
+      <div className="max-w-3xl sm:ml-auto rounded-2xl border border-white/[0.06] overflow-hidden divide-y divide-white/[0.06]">
+        {FAQS.map((item, i) => {
+          const isOpen = open === i
+          return (
+            <div key={item.q} className="bg-white/[0.015]">
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : i)}
+                className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left"
+                aria-expanded={isOpen}
+              >
+                <span className="text-sm font-medium text-white/80">{item.q}</span>
+                <span className={`flex-shrink-0 text-white/30 transition-transform ${isOpen ? 'rotate-45' : ''}`}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </span>
+              </button>
+              <div className={`grid transition-[grid-template-rows] duration-200 ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div className="overflow-hidden">
+                  <p className="px-5 pb-5 text-sm text-white/40 leading-relaxed whitespace-pre-line">{item.a}</p>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
 export default function LandingPage() {
@@ -71,57 +142,41 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0c0e13] text-white overflow-x-hidden">
 
-      {/* Dot grid */}
-      <div className="fixed inset-0 pointer-events-none" style={{
-        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)',
-        backgroundSize: '30px 30px',
-      }} />
-
-      {/* Ambient glows — repositioned to feel less symmetrical */}
-      <div className="fixed top-[-20%] left-[10%] w-[800px] h-[600px] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(99,102,241,0.07) 0%, transparent 60%)' }} />
-      <div className="fixed top-[40%] right-[-5%] w-[500px] h-[500px] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(20,184,166,0.05) 0%, transparent 60%)' }} />
-
       {/* ── Nav ─────────────────────────────────── */}
       <nav className="relative z-10 flex items-center justify-between px-6 sm:px-14 py-5 border-b border-white/[0.05]">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center font-black text-sm">P</div>
           <span className="text-base font-bold tracking-tight">plama</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/login"
-            className="text-sm text-white/50 hover:text-white px-4 py-2 rounded-lg hover:bg-white/[0.04] transition">
-            Sign in
-          </Link>
-          <Link to="/register"
-            className="text-sm font-semibold bg-white text-[#0c0e13] hover:bg-white/90 px-4 py-2 rounded-lg transition">
-            Get started free
-          </Link>
+        <div className="flex items-center gap-x-1.5 sm:gap-x-2"> 
+          <a href="#faq" className="hidden sm:inline text-sm font-medium text-white/50 hover:text-white px-3 py-1.5 rounded-md hover:bg-white/[0.04] transition"> 
+            FAQ 
+          </a> 
+          <Link to="/login" className="text-sm font-medium text-white/50 hover:text-white px-3 py-1.5 rounded-md hover:bg-white/[0.04] transition"> 
+            Sign in 
+          </Link> 
+          <Link to="/register" className="text-sm font-semibold bg-white text-[#0c0e13] hover:bg-white/90 px-4 py-2 rounded-lg ml-1.5 transition"> 
+            Get started 
+          </Link> 
         </div>
       </nav>
 
       {/* ── Hero ────────────────────────────────── */}
       <section className="relative z-10 px-6 sm:px-14 pt-24 pb-8 max-w-7xl mx-auto">
 
-        {/* No badge — replaced with a tight, plain descriptor */}
-        <p className="text-xs font-medium text-white/30 tracking-[0.15em] uppercase mb-8"
-          style={{ animation: 'fadeUp 0.4s ease both' }}>
-          Kanban · Real-time · Teams
-        </p>
-
-        <div className="max-w-3xl">
-          <h1
-            className="text-5xl sm:text-[64px] lg:text-[72px] font-bold tracking-[-0.02em] leading-[0.95] mb-8 text-white/85"
-            style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-          >
-            Where work<br />
-            <span className="text-indigo-400 font-semibold">clicks.</span>
-          </h1>
-
-          <p className="text-[17px] text-white/40 leading-relaxed max-w-md mb-10"
-            style={{ animation: 'fadeUp 0.5s 0.1s ease both' }}>
-            A visual workspace for teams to plan, track, and ship — in real time.
+        <div className="max-w-3xl"> 
+          <h1 
+            className="font-fraunces text-5xl sm:text-[64px] lg:text-[72px] font-medium tracking-[-0.015em] leading-[1.05] mb-8 text-white/95" 
+            style={{ animation: 'fadeUp 0.4s ease both' }}
+          > 
+            Where work<br /> 
+            <span className="text-indigo-400 font-semibold tracking-[-0.02em]">clicks.</span> 
+          </h1> 
+          <p 
+            className="text-[17px] text-white/50 leading-relaxed max-w-md mb-10" 
+            style={{ animation: 'fadeUp 0.5s 0.1s ease both' }}
+          > 
+            A visual workspace for teams to plan, track, and ship in real time. 
           </p>
 
           <div className="flex flex-wrap items-center gap-3"
@@ -131,6 +186,7 @@ export default function LandingPage() {
               Start for free
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </Link>
+            <ContinueAsGuest />
             <Link to="/login"
               className="text-sm text-white/40 hover:text-white/70 px-4 py-3 transition">
               Already have an account →
@@ -151,8 +207,7 @@ export default function LandingPage() {
             className="transition-transform duration-150 ease-out"
             style={{ transformStyle: 'preserve-3d', willChange: 'transform' }}
           >
-          <div className="rounded-2xl border border-white/[0.08] overflow-hidden shadow-[0_60px_120px_rgba(0,0,0,0.8)]"
-            style={{ background: 'linear-gradient(160deg, #161825 0%, #0f1118 100%)' }}>
+          <div className="rounded-2xl border border-white/[0.08] overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.5)] bg-[#14161f]">
 
             {/* Titlebar */}
             <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.06] bg-black/20">
@@ -223,10 +278,9 @@ export default function LandingPage() {
             <p className="text-xs font-medium text-white/25 tracking-[0.15em] uppercase mb-3">Features</p>
             <div className="w-8 h-px bg-indigo-500/50" />
           </div>
-          <h2 className="text-3xl sm:text-[42px] font-black tracking-tight leading-[1.1] sm:text-right"
-            style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-            Built for how<br />
-            <span className="text-white/25">teams actually work.</span>
+          <h2 className="text-3xl sm:text-[38px] font-bold tracking-tight leading-[1.1] sm:text-right">
+            What's<br />
+            <span className="text-white/25">in the box.</span>
           </h2>
         </div>
 
@@ -245,17 +299,22 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <FaqSection />
+
       {/* ── CTA ─────────────────────────────────── */}
       <section className="relative z-10 px-6 sm:px-14 pb-32 max-w-7xl mx-auto">
-        {/* Left-aligned instead of centered — breaks the template feel */}
-        <div className="max-w-2xl">
-          <p className="text-xs font-medium text-white/25 tracking-[0.15em] uppercase mb-6">Get started</p>
-          <h2 className="text-4xl sm:text-[56px] font-black tracking-tight leading-[1.04] mb-6 text-white/90"
-            style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-            Ready to get<br />organised?
+        {/* Left-aligned instead of centered*/}
+        <div className="max-w-2xl"> 
+          <p className="text-xs font-semibold text-white/30 tracking-[0.2em] uppercase mb-5">
+            Get started
+          </p> 
+          <h2 
+            className="font-fraunces text-4xl sm:text-[56px] font-medium tracking-[-0.015em] leading-[1.05] mb-6 text-white/95"
+          > 
+            Ready to get<br />organized? 
           </h2>
           <p className="text-white/35 text-lg mb-10 max-w-sm leading-relaxed">
-            Create your first board in seconds. No credit card required.
+            Create your first board in seconds.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link to="/register"
@@ -267,6 +326,7 @@ export default function LandingPage() {
               className="text-sm text-white/35 hover:text-white/65 transition">
               Sign in instead →
             </Link>
+            <ContinueAsGuest variant="muted" />
           </div>
         </div>
       </section>
@@ -284,6 +344,7 @@ export default function LandingPage() {
               Mokenye
             </a>.
           </p>
+          <a href="#faq" className="text-xs text-white/20 hover:text-white/40 transition">FAQ</a>
         </div>
       </footer>
 

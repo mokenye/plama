@@ -7,6 +7,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        display: ['"Fraunces"', 'ui-serif', 'serif'],
+      },
       colors: {
         brand: {
           50: '#e6f2ff',
