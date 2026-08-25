@@ -129,7 +129,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 
     // Get members
     const membersResult = await executeRead(
-      `SELECT u.id, u.name, u.email, u.avatar_url, bm.role
+      `SELECT u.id, u.name, u.email, u.avatar_url, u.is_guest, bm.role
        FROM board_members bm JOIN users u ON bm.user_id = u.id
        WHERE bm.board_id = $1`,
       [boardId]

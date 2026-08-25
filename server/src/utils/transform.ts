@@ -42,4 +42,5 @@ export const transformMember = (dbMember: any) => ({
   email: dbMember.email,
   avatarUrl: dbMember.avatar_url,
   role: dbMember.role,
+  isGuest: !!dbMember.is_guest,
 });

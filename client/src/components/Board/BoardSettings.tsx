@@ -9,6 +9,7 @@ interface Member {
   email: string
   role: string
   avatarUrl?: string
+  isGuest?: boolean
 }
 
 interface BoardSettingsProps {
@@ -240,7 +241,9 @@ export default function BoardSettings({
                         <span className="ml-1.5 text-xs text-gray-400">(you)</span>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.email}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {member.isGuest || !member.email ? 'Guest account' : member.email}
+                    </p>
                   </div>
 
                   {/* Role badge */}
