@@ -4,9 +4,77 @@ import { executeRead, executeWrite } from '../db/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { notifyBoardInvite, userSockets, getIo } from '../utils/notifications';
 import { logger } from '../utils/logger';
+import { signInviteToken, verifyInviteToken } from '../utils/jwt';
 
 const router = Router();
 router.use(authenticate);
+
+// ================================
+// GET /api/boards/:boardId/invite-link
+// Generate a shareable link so anyone (including a guest session) can join
+// ================================
+router.get('/:boardId/invite-link', async (req: AuthRequest, res: Response) => {
+  try {
+    const boardId = parseInt(req.params.boardId);
+
+    const access = await executeRead(
+      `SELECT role FROM board_members WHERE board_id = $1 AND user_id = $2`,
+      [boardId, req.userId]
+    );
+
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const token = signInviteToken(boardId);
+    res.json({ token });
+  } catch (error) {
+    logger.error({ error }, '[Members API] Error creating invite link');
+    res.status(500).json({ error: 'Failed to create invite link' });
+  }
+});
+
+// ================================
+// POST /api/boards/join/:token
+// Join a board via a shareable invite link
+// ================================
+router.post('/join/:token', async (req: AuthRequest, res: Response) => {
+  try {
+    let boardId: number;
+    try {
+      boardId = verifyInviteToken(req.params.token).boardId;
+    } catch {
+      return res.status(400).json({ error: 'Invite link is invalid or expired' });
+    }
+
+    const boardResult = await executeRead(`SELECT id FROM boards WHERE id = $1`, [boardId]);
+    if (boardResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    const existingMember = await executeRead(
+      `SELECT id FROM board_members WHERE board_id = $1 AND user_id = $2`,
+      [boardId, req.userId]
+    );
+
+    if (existingMember.rows.length === 0) {
+      await executeWrite(
+        `INSERT INTO board_members (board_id, user_id, role) VALUES ($1, $2, 'member')`,
+        [boardId, req.userId]
+      );
+
+      const io = getIo();
+      if (io) {
+        io.to(`board:${boardId}`).emit('member-joined', { boardId, userId: req.userId, name: req.userName });
+      }
+    }
+
+    res.json({ boardId });
+  } catch (error) {
+    logger.error({ error }, '[Members API] Error joining board via invite link');
+    res.status(500).json({ error: 'Failed to join board' });
+  }
+});
 
 // ================================
 // POST /api/boards/:boardId/members

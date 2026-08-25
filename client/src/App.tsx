@@ -5,6 +5,8 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import BoardPage from './pages/BoardPage'
 import LandingPage from './pages/LandingPage'
+import JoinBoardPage from './pages/JoinBoardPage'
+import GuestNotice from './components/Auth/GuestNotice'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { Analytics } from '@vercel/analytics/react'
 
@@ -23,11 +25,15 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 export default function App() {
   return (
     <BrowserRouter>
+      <GuestNotice />
       <Routes>
         {/* Landing / root */}
         <Route path="/" element={<RootRoute />} />
 
-        {/* Auth routes — redirect to dashboard if already logged in */}
+        {/* Shareable board invite link. Works for guests and signed-in users */}
+        <Route path="/join/:token" element={<JoinBoardPage />} />
+
+        {/* Auth routes -- redirect to dashboard if already logged in (except guest sessions) */}
         <Route path="/login" element={
           <AuthRoute><LoginPage /></AuthRoute>
         } />
@@ -59,5 +65,6 @@ export default function App() {
 // Redirect already-authenticated users away from login/register
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>
+  const isGuest = useAuthStore((state) => state.user?.isGuest)
+  return isAuthenticated && !isGuest ? <Navigate to="/dashboard" replace /> : <>{children}</>
 }

@@ -59,6 +59,11 @@ export const authApi = {
     return res.data;
   },
 
+  guest: async () => {
+    const res = await api.post<AuthResponse>('/auth/guest');
+    return res.data;
+  },
+
   ping: () => api.get('/ping').catch(() => {})
 };
 
@@ -83,6 +88,16 @@ export const boardsApi = {
 
   delete: async (boardId: number) => {
     const res = await api.delete(`/boards/${boardId}`);
+    return res.data;
+  },
+
+  getInviteLink: async (boardId: number) => {
+    const res = await api.get<{ token: string }>(`/boards/${boardId}/invite-link`);
+    return res.data;
+  },
+
+  joinViaToken: async (token: string) => {
+    const res = await api.post<{ boardId: number }>(`/boards/join/${token}`);
     return res.data;
   },
 };

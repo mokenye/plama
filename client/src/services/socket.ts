@@ -183,6 +183,8 @@ export const bindBoardEvents = (boardId: number) => {
   const onUserLeft     = ({ userId }: SocketUserLeft)   => store().removeActiveUser(userId);
   const onUserAway     = ({ userId }: { userId: number }) => store().setUserAway(userId, true);
   const onUserActive   = ({ userId }: { userId: number }) => store().setUserAway(userId, false);
+  const onMemberJoined = ({ userId, name }: { userId: number; name: string }) =>
+    store().addMember({ id: userId, name, email: '', role: 'member' });
 
   s.on('connect',          onConnect);
   s.on('disconnect',       onDisconnect);
@@ -202,6 +204,7 @@ export const bindBoardEvents = (boardId: number) => {
   s.on('user-left',        onUserLeft);
   s.on('user-away',        onUserAway);
   s.on('user-active',      onUserActive);
+  s.on('member-joined',    onMemberJoined);
 
   // Store named handlers so unbind can remove only ours
   (s as any)._boardHandlers = {
@@ -209,7 +212,7 @@ export const bindBoardEvents = (boardId: number) => {
     onCardCreated, onCardUpdated, onCardMoved, onCardDeleted, onListCreated, onListDeleted,
     onCardsReordered, onListMoved,
     onCardError, onCardMoveFailed,
-    onActiveUsers, onUserJoined, onUserLeft, onUserAway, onUserActive,
+    onActiveUsers, onUserJoined, onUserLeft, onUserAway, onUserActive, onMemberJoined,
   };
 };
 
@@ -234,6 +237,7 @@ function unbindBoardEventsInternal(s: Socket) {
   s.off('user-left',        h.onUserLeft);
   s.off('user-away',        h.onUserAway);
   s.off('user-active',      h.onUserActive);
+  s.off('member-joined',    h.onMemberJoined);
   delete (s as any)._boardHandlers;
 }
 
